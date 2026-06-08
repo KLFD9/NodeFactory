@@ -1,0 +1,128 @@
+[
+  {
+    "id": "iron-ingot",
+    "name": "Iron Ingot",
+    "alternate": false,
+    "time": 2,
+    "producedIn": "smelter",
+    "ingredients": [{ "item": "iron-ore", "amountPerCycle": 1 }],
+    "products": [{ "item": "iron-ingot", "amountPerCycle": 1 }]
+  },
+  {
+    "id": "copper-ingot",
+    "name": "Copper Ingot",
+    "alternate": false,
+    "time": 2,
+    "producedIn": "smelter",
+    "ingredients": [{ "item": "copper-ore", "amountPerCycle": 1 }],
+    "products": [{ "item": "copper-ingot", "amountPerCycle": 1 }]
+  },
+  {
+    "id": "iron-plate",
+    "name": "Iron Plate",
+    "alternate": false,
+    "time": 6,
+    "producedIn": "constructor",
+    "ingredients": [{ "item": "iron-ingot", "amountPerCycle": 3 }],
+    "products": [{ "item": "iron-plate", "amountPerCycle": 2 }]
+  },
+  {
+    "id": "iron-rod",
+    "name": "Iron Rod",
+    "alternate": false,
+    "time": 4,
+    "producedIn": "constructor",
+    "ingredients": [{ "item": "iron-ingot", "amountPerCycle": 1 }],
+    "products": [{ "item": "iron-rod", "amountPerCycle": 1 }]
+  },
+  {
+    "id": "screw",
+    "name": "Screw",
+    "alternate": false,
+    "time": 6,
+    "producedIn": "constructor",
+    "ingredients": [{ "item": "iron-rod", "amountPerCycle": 1 }],
+    "products": [{ "item": "screw", "amountPerCycle": 4 }]
+  },
+  {
+    "id": "reinforced-iron-plate",
+    "name": "Reinforced Iron Plate",
+    "alternate": false,
+    "time": 12,
+    "producedIn": "assembler",
+    "ingredients": [
+      { "item": "iron-plate", "amountPerCycle": 6 },
+      { "item": "screw", "amountPerCycle": 12 }
+    ],
+    "products": [{ "item": "reinforced-iron-plate", "amountPerCycle": 1 }]
+  },
+  {
+    "id": "modular-frame",
+    "name": "Modular Frame",
+    "alternate": false,
+    "time": 60,
+    "producedIn": "assembler",
+    "ingredients": [
+      { "item": "reinforced-iron-plate", "amountPerCycle": 3 },
+      { "item": "iron-rod", "amountPerCycle": 12 }
+    ],
+    "products": [{ "item": "modular-frame", "amountPerCycle": 2 }]
+  },
+  {
+    "id": "wire",
+    "name": "Wire",
+    "alternate": false,
+    "time": 4,
+    "producedIn": "constructor",
+    "ingredients": [{ "item": "copper-ingot", "amountPerCycle": 1 }],
+    "products": [{ "item": "wire", "amountPerCycle": 2 }]
+  },
+  {
+    "id": "cable",
+    "name": "Cable",
+    "alternate": false,
+    "time": 2,
+    "producedIn": "constructor",
+    "ingredients": [{ "item": "wire", "amountPerCycle": 2 }],
+    "products": [{ "item": "cable", "amountPerCycle": 1 }]
+  },
+  {
+    "id": "concrete",
+    "name": "Concrete",
+    "alternate": false,
+    "time": 4,
+    "producedIn": "constructor",
+    "ingredients": [{ "item": "limestone", "amountPerCycle": 3 }],
+    "products": [{ "item": "concrete", "amountPerCycle": 1 }]
+  },
+  {
+    "id": "alt-cast-screw",
+    "name": "Alternate: Cast Screw",
+    "alternate": true,
+    "time": 24,
+    "producedIn": "constructor",
+    "ingredients": [{ "item": "iron-ingot", "amountPerCycle": 5 }],
+    "products": [{ "item": "screw", "amountPerCycle": 20 }]
+  },
+  {
+    "id": "alt-bolted-iron-plate",
+    "name": "Alternate: Bolted Iron Plate",
+    "alternate": true,
+    "time": 12,
+    "producedIn": "assembler",
+    "ingredients": [
+      { "item": "iron-plate", "amountPerCycle": 18 },
+      { "item": "screw", "amountPerCycle": 50 }
+    ],
+    "products": [{ "item": "reinforced-iron-plate", "amountPerCycle": 3 }]
+  },
+  {
+    "id": "alt-iron-wire",
+    "name": "Alternate: Iron Wire",
+    "alternate": true,
+    "time": 24,
+    "producedIn": "constructor",
+    "ingredients": [{ "item": "iron-ingot", "amountPerCycle": 5 }],
+    "products": [{ "item": "wire", "amountPerCycle": 9 }]
+  }
+]

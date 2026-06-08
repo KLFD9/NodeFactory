@@ -1,0 +1,4 @@
+[
+  { "id": "biomass-burner", "name": "Biomass Burner", "powerMW": 30 },
+  { "id": "coal-generator", "name": "Coal Generator", "fuel": "coal", "powerMW": 75 }
+]

@@ -1,0 +1,97 @@
+[
+  {
+    "id": "miner-mk1",
+    "name": "Miner Mk.1",
+    "category": "extraction",
+    "powerMW": 5,
+    "outputs": 1,
+    "dimensions": { "width": 8, "length": 14, "height": 18 },
+    "extractionBasePerMin": 60
+  },
+  {
+    "id": "miner-mk2",
+    "name": "Miner Mk.2",
+    "category": "extraction",
+    "powerMW": 12,
+    "outputs": 1,
+    "extractionBasePerMin": 120
+  },
+  {
+    "id": "miner-mk3",
+    "name": "Miner Mk.3",
+    "category": "extraction",
+    "powerMW": 30,
+    "outputs": 1,
+    "extractionBasePerMin": 240
+  },
+  {
+    "id": "smelter",
+    "name": "Smelter",
+    "category": "smelting",
+    "powerMW": 4,
+    "inputs": 1,
+    "outputs": 1,
+    "dimensions": { "width": 6, "length": 9, "height": 9 }
+  },
+  {
+    "id": "foundry",
+    "name": "Foundry",
+    "category": "smelting",
+    "powerMW": 16,
+    "inputs": 2,
+    "outputs": 1,
+    "dimensions": { "width": 10, "length": 9, "height": 9 }
+  },
+  {
+    "id": "constructor",
+    "name": "Constructor",
+    "category": "manufacturing",
+    "powerMW": 4,
+    "inputs": 1,
+    "outputs": 1,
+    "dimensions": { "width": 8, "length": 10, "height": 8 }
+  },
+  {
+    "id": "assembler",
+    "name": "Assembler",
+    "category": "manufacturing",
+    "powerMW": 15,
+    "inputs": 2,
+    "outputs": 1,
+    "dimensions": { "width": 10, "length": 15, "height": 11 }
+  },
+  {
+    "id": "manufacturer",
+    "name": "Manufacturer",
+    "category": "manufacturing",
+    "powerMW": 55,
+    "inputs": 4,
+    "outputs": 1,
+    "dimensions": { "width": 18, "length": 20, "height": 12 }
+  },
+  {
+    "id": "refinery",
+    "name": "Refinery",
+    "category": "manufacturing",
+    "powerMW": 30,
+    "inputs": 2,
+    "outputs": 2,
+    "dimensions": { "width": 10, "length": 20, "height": 31 }
+  },
+  {
+    "id": "splitter",
+    "name": "Conveyor Splitter",
+    "category": "logistics",
+    "powerMW": 0,
+    "inputs": 1,
+    "outputs": 3
+  },
+  {
+    "id": "merger",
+    "name": "Conveyor Merger",
+    "category": "logistics",
+    "powerMW": 0,
+    "inputs": 3,
+    "outputs": 1
+  }
+]

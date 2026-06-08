@@ -1,0 +1,152 @@
+import { useCallback, useEffect, useMemo } from 'react';
+import {
+  Background,
+  Controls,
+  MarkerType,
+  MiniMap,
+  ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
+  type NodeTypes,
+  type OnSelectionChangeParams,
+} from '@xyflow/react';
+import { useFactoryStore } from '@/store/useFactoryStore';
+import { useGraphStore } from '@/store/useGraphStore';
+import { computeFactory } from '@/graph/computeFactory';
+import { MachineNode } from './nodes/MachineNode';
+import { PALETTE_MIME } from './Palette';
+
+/** Couleur d'arête par tier de convoyeur (Mk1..Mk6). */
+const TIER_COLOR: Record<number, string> = {
+  1: '#9ca3af',
+  2: '#60a5fa',
+  3: '#34d399',
+  4: '#fbbf24',
+  5: '#f472b6',
+  6: '#fb923c',
+};
+
+function Flow() {
+  const gameData = useFactoryStore((s) => s.gameData);
+  const nodes = useGraphStore((s) => s.nodes);
+  const edges = useGraphStore((s) => s.edges);
+  const onNodesChange = useGraphStore((s) => s.onNodesChange);
+  const onEdgesChange = useGraphStore((s) => s.onEdgesChange);
+  const onConnect = useGraphStore((s) => s.onConnect);
+  const addBuildingNode = useGraphStore((s) => s.addBuildingNode);
+  const selectNode = useGraphStore((s) => s.selectNode);
+
+  const generation = useGraphStore((s) => s.generation);
+  const copySelection = useGraphStore((s) => s.copySelection);
+  const paste = useGraphStore((s) => s.paste);
+  const duplicateSelection = useGraphStore((s) => s.duplicateSelection);
+  const { screenToFlowPosition, fitView } = useReactFlow();
+  const nodeTypes = useMemo<NodeTypes>(() => ({ machine: MachineNode }), []);
+
+  // Recentre le canvas après chaque auto-génération.
+  useEffect(() => {
+    if (generation > 0) window.requestAnimationFrame(() => fitView({ duration: 300 }));
+  }, [generation, fitView]);
+
+  // Copié-collé (Cmd/Ctrl + C / V / D).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.isContentEditable) return;
+      const k = e.key.toLowerCase();
+      if (k === 'c') copySelection();
+      else if (k === 'v') paste();
+      else if (k === 'd') {
+        e.preventDefault();
+        duplicateSelection();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [copySelection, paste, duplicateSelection]);
+
+  // Décore les arêtes : libellé débit + item, couleur par tier, rouge pointillé si surcharge.
+  const styledEdges = useMemo(() => {
+    if (!gameData) return edges;
+    const plans = new Map(computeFactory(nodes, edges, gameData).edges.map((p) => [p.edgeId, p]));
+    return edges.map((e) => {
+      const plan = plans.get(e.id);
+      if (!plan || plan.itemId == null) return e;
+      const overloaded = plan.belt.overloaded;
+      const color = overloaded ? '#ef4444' : (TIER_COLOR[plan.belt.tier ?? 1] ?? '#9ca3af');
+      const tierLabel = overloaded ? `${plan.belt.lines}×Mk${plan.belt.tier}` : `Mk${plan.belt.tier}`;
+      return {
+        ...e,
+        animated: true,
+        label: `${plan.itemName} · ${plan.ratePerMin}/min · ${tierLabel}`,
+        markerEnd: { type: MarkerType.ArrowClosed, color, width: 18, height: 18 },
+        style: { stroke: color, strokeWidth: 3, strokeDasharray: overloaded ? '8 4' : undefined },
+        labelStyle: { fill: '#fafafa', fontSize: 11, fontWeight: 600 },
+        labelBgStyle: { fill: '#09090b', fillOpacity: 0.9 },
+        labelBgPadding: [6, 3] as [number, number],
+        labelBgBorderRadius: 4,
+      };
+    });
+  }, [nodes, edges, gameData]);
+
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const raw = e.dataTransfer.getData(PALETTE_MIME);
+      if (!raw) return;
+      const { buildingId, category } = JSON.parse(raw) as { buildingId: string; category: string };
+      const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      addBuildingNode(buildingId, position, category);
+    },
+    [addBuildingNode, screenToFlowPosition],
+  );
+
+  const onSelectionChange = useCallback(
+    ({ nodes: sel }: OnSelectionChangeParams) => selectNode(sel[0]?.id ?? null),
+    [selectNode],
+  );
+
+  return (
+    <div className="h-full w-full" onDragOver={onDragOver} onDrop={onDrop}>
+      <ReactFlow
+        nodes={nodes}
+        edges={styledEdges}
+        nodeTypes={nodeTypes}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onSelectionChange={onSelectionChange}
+        defaultEdgeOptions={{
+          markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
+          style: { strokeWidth: 3 },
+        }}
+        fitView
+        proOptions={{ hideAttribution: true }}
+      >
+        <Background />
+        <Controls />
+        <MiniMap
+          pannable
+          zoomable
+          nodeColor="#3f3f46"
+          maskColor="rgba(9,9,11,0.7)"
+          className="!bg-zinc-900"
+        />
+      </ReactFlow>
+    </div>
+  );
+}
+
+export function GraphCanvas() {
+  return (
+    <ReactFlowProvider>
+      <Flow />
+    </ReactFlowProvider>
+  );
+}
