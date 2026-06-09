@@ -8,6 +8,7 @@ import {
   ReactFlowProvider,
   useReactFlow,
   ConnectionLineType,
+  type Connection,
   type NodeTypes,
   type OnSelectionChangeParams,
 } from '@xyflow/react';
@@ -15,10 +16,12 @@ import type { IsValidConnection } from '@xyflow/react';
 import { useFactoryStore } from '@/store/useFactoryStore';
 import { useGraphStore } from '@/store/useGraphStore';
 import { computeFactory } from '@/graph/computeFactory';
+import { computeNodeInfo } from '@/graph/nodeInfo';
 import { isValidGraphConnection } from '@/graph/connection';
 import { MachineNode } from './nodes/MachineNode';
 import { BeltEdge } from './edges/BeltEdge';
 import { PALETTE_MIME } from './Palette';
+import { NodeFlowContext, type NodeActualFlow } from './NodeFlowContext';
 
 /** Couleur d'arête par tier de convoyeur (Mk1..Mk6). */
 const TIER_COLOR: Record<number, string> = {
@@ -36,7 +39,8 @@ function Flow() {
   const edges = useGraphStore((s) => s.edges);
   const onNodesChange = useGraphStore((s) => s.onNodesChange);
   const onEdgesChange = useGraphStore((s) => s.onEdgesChange);
-  const onConnect = useGraphStore((s) => s.onConnect);
+  const storeOnConnect = useGraphStore((s) => s.onConnect);
+  const updateNodeData = useGraphStore((s) => s.updateNodeData);
   const dropBuildingNode = useGraphStore((s) => s.dropBuildingNode);
   const selectNode = useGraphStore((s) => s.selectNode);
 
@@ -71,17 +75,48 @@ function Flow() {
     return () => window.removeEventListener('keydown', onKey);
   }, [copySelection, paste, duplicateSelection]);
 
-  // Décore les arêtes (type custom « belt ») : couleur/flèche par tier, données pour le label.
-  const styledEdges = useMemo(() => {
-    // `data-edge-id` sert à retrouver l'arête sous le curseur lors d'un drop (cast : les
-    // attributs data-* custom ne sont pas dans le type SVGAttributes de domAttributes).
+  // Connexion avec auto-détection de recette : si le target n'a pas de recette et qu'une seule
+  // recette standard accepte l'item entrant dans ce bâtiment, on l'assigne automatiquement.
+  const onConnect = useCallback((connection: Connection) => {
+    storeOnConnect(connection);
+    if (!gameData || !connection.target) return;
+    const { nodes } = useGraphStore.getState();
+    const target = nodes.find((n) => n.id === connection.target);
+    if (!target || target.data.recipeId) return; // déjà configuré
+    const source = nodes.find((n) => n.id === connection.source);
+    if (!source) return;
+    const srcInfo = computeNodeInfo(source.data, gameData);
+    // L'item porté par ce handle (ex. "out-iron-ore" → "iron-ore"), sinon premier output.
+    const itemId = connection.sourceHandle?.startsWith('out-')
+      ? connection.sourceHandle.slice(4)
+      : srcInfo.outputs[0]?.itemId;
+    if (!itemId) return;
+    const candidates = gameData.recipes.filter(
+      (r) =>
+        r.producedIn === target.data.buildingId &&
+        !r.alternate &&
+        r.ingredients.some((ing) => ing.item === itemId),
+    );
+    if (candidates.length === 1) updateNodeData(target.id, { recipeId: candidates[0].id });
+  }, [storeOnConnect, updateNodeData, gameData]);
+
+  // Calcule en un seul pass : styles d'arêtes + flux réels par node (pour les indicateurs dans MachineNode).
+  const { styledEdges, nodeFlowMap } = useMemo(() => {
     const domAttributes = (id: string) =>
       ({ 'data-edge-id': id }) as unknown as React.SVGAttributes<SVGGElement>;
+
     if (!gameData) {
-      return edges.map((e) => ({ ...e, type: 'belt', domAttributes: domAttributes(e.id) }));
+      return {
+        styledEdges: edges.map((e) => ({ ...e, type: 'belt', domAttributes: domAttributes(e.id) })),
+        nodeFlowMap: new Map<string, NodeActualFlow>(),
+      };
     }
-    const plans = new Map(computeFactory(nodes, edges, gameData).edges.map((p) => [p.edgeId, p]));
-    return edges.map((e) => {
+
+    const summary = computeFactory(nodes, edges, gameData);
+    const plans = new Map(summary.edges.map((p) => [p.edgeId, p]));
+
+    // Styles d'arêtes (logique existante).
+    const styledEdges = edges.map((e) => {
       const plan = plans.get(e.id);
       if (!plan || plan.itemId == null) {
         return { ...e, type: 'belt', domAttributes: domAttributes(e.id) };
@@ -92,13 +127,31 @@ function Flow() {
       return {
         ...e,
         type: 'belt',
-        animated: true,
         domAttributes: domAttributes(e.id),
-        markerEnd: { type: MarkerType.ArrowClosed, color, width: 18, height: 18 },
-        style: { stroke: color, strokeWidth: 3, strokeDasharray: overloaded ? '8 4' : undefined },
-        data: { itemName: plan.itemName, rate: plan.ratePerMin, tierLabel, color },
+        markerEnd: { type: MarkerType.ArrowClosed, color, width: 10, height: 10 },
+        style: { stroke: color, strokeWidth: 3 },
+        data: { itemName: plan.itemName, rate: plan.ratePerMin, tierLabel, color, overloaded },
       };
     });
+
+    // Flux réels par node : somme des débits arêtes entrantes/sortantes par item.
+    const nodeFlowMap = new Map<string, NodeActualFlow>();
+    const getFlow = (nodeId: string): NodeActualFlow => {
+      if (!nodeFlowMap.has(nodeId))
+        nodeFlowMap.set(nodeId, { inputs: new Map(), outputs: new Map() });
+      return nodeFlowMap.get(nodeId)!;
+    };
+    for (const e of edges) {
+      const plan = plans.get(e.id);
+      if (!plan?.itemId) continue;
+      const { itemId, ratePerMin } = plan;
+      const tgt = getFlow(e.target);
+      tgt.inputs.set(itemId, (tgt.inputs.get(itemId) ?? 0) + ratePerMin);
+      const src = getFlow(e.source);
+      src.outputs.set(itemId, (src.outputs.get(itemId) ?? 0) + ratePerMin);
+    }
+
+    return { styledEdges, nodeFlowMap };
   }, [nodes, edges, gameData]);
 
   const onDragOver = useCallback((e: React.DragEvent) => {
@@ -141,6 +194,7 @@ function Flow() {
   );
 
   return (
+    <NodeFlowContext.Provider value={nodeFlowMap}>
     <div className="h-full w-full" onDragOver={onDragOver} onDrop={onDrop}>
       <ReactFlow
         nodes={nodes}
@@ -159,7 +213,7 @@ function Flow() {
         snapGrid={[16, 16]}
         defaultEdgeOptions={{
           type: 'belt',
-          markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
+          markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10 },
           style: { strokeWidth: 3 },
         }}
         fitView
@@ -176,6 +230,7 @@ function Flow() {
         />
       </ReactFlow>
     </div>
+    </NodeFlowContext.Provider>
   );
 }
 

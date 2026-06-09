@@ -17,11 +17,11 @@ body,
 /* Pads (handles) : grossissent et s'illuminent au survol, comme des points de snap. */
 .react-flow__handle {
   transition:
-    transform 120ms ease,
+    scale 120ms ease,
     box-shadow 120ms ease;
 }
 .react-flow__handle:hover {
-  transform: scale(1.6);
+  scale: 1.4;
   box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.35);
   z-index: 10;
 }
@@ -63,4 +63,48 @@ body,
 }
 .react-flow__node {
   animation: nf-pop 140ms ease;
+}
+
+/* ── Flux de convoyeur — items qui se déplacent de la source vers la cible ── */
+@keyframes belt-flow {
+  to { stroke-dashoffset: -15; }
+}
+
+/* Renforcement au survol de l'arête animée. */
+.react-flow__edge:hover .nf-belt-flow {
+  opacity: 1 !important;
+  filter: brightness(1.5) !important;
+}
+
+/* ── Animations internes des nodes ─────────────────────────────────────────── */
+
+/* Barre de cycle de production : remplit de gauche à droite en `cycleTime`s. */
+@keyframes nf-cycle {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* Indicateur d'activité (point pulsant dans le header). */
+@keyframes nf-activity-dot {
+  0%, 100% { opacity: 1;    transform: scale(1);   }
+  50%       { opacity: 0.3; transform: scale(0.55); }
+}
+
+/* ── Bilan dynamique — ticker de production par item ───────────────────────── */
+@keyframes nf-bilan-ticker {
+  from { background-position-x: 15px; }
+  to   { background-position-x: 0;    }
+}
+.nf-bilan-ticker {
+  height: 2px;
+  border-radius: 1px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--nf-tick-color, #10b981) 0,
+    var(--nf-tick-color, #10b981) 3px,
+    transparent 3px,
+    transparent 12px
+  );
+  background-size: 15px 100%;
+  animation: nf-bilan-ticker var(--nf-tick-speed, 1s) linear infinite;
 }

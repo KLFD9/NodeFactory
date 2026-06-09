@@ -13,6 +13,13 @@ export interface BeltEdgeData extends Record<string, unknown> {
   rate?: number;
   tierLabel?: string;
   color?: string;
+  overloaded?: boolean;
+}
+
+/** Durée d'animation en secondes proportionnelle au débit (2.5s @ 60/min → 0.35s @ 1200/min). */
+function beltFlowDuration(rate: number): number {
+  const speed = Math.max(rate, 1) / 60;
+  return Math.max(0.35, Math.min(3.0, 2.5 / speed));
 }
 
 /**
@@ -43,9 +50,35 @@ export function BeltEdge(props: EdgeProps) {
     setOpen(false);
   };
 
+  const hasFlow = (data?.rate ?? 0) > 0;
+  const flowColor = data?.color ?? '#9ca3af';
+  const flowDuration = hasFlow ? beltFlowDuration(data!.rate!) : 0;
+  // Légère atténuation de la piste de base quand les items circulent dessus.
+  const baseStyle = hasFlow ? { ...style, opacity: 0.45 } : style;
+
   return (
     <>
-      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={style} />
+      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={baseStyle} />
+      {hasFlow && (
+        <path
+          className="nf-belt-flow"
+          d={edgePath}
+          fill="none"
+          stroke={flowColor}
+          strokeWidth={3}
+          strokeDasharray="3 12"
+          strokeLinecap="round"
+          style={{
+            strokeDashoffset: 0,
+            animation: `belt-flow ${flowDuration}s linear infinite`,
+            filter: data?.overloaded
+              ? 'brightness(1.2) drop-shadow(0 0 3px #ef4444)'
+              : 'brightness(1.35)',
+            opacity: 0.9,
+            pointerEvents: 'none',
+          }}
+        />
+      )}
       <EdgeLabelRenderer>
         <div
           className="nodrag nopan group absolute flex flex-col items-center"
@@ -54,10 +87,21 @@ export function BeltEdge(props: EdgeProps) {
             pointerEvents: 'all',
           }}
         >
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             {data?.itemName && (
-              <span className="whitespace-nowrap rounded bg-zinc-950/90 px-1.5 py-0.5 text-[11px] font-semibold text-zinc-100 ring-1 ring-zinc-700">
-                {data.itemName} · {data.rate}/min · {data.tierLabel}
+              <span className="whitespace-nowrap rounded-full bg-zinc-950/95 px-2 py-0.5 text-[10px] font-medium text-zinc-300 ring-1 ring-zinc-800/80 group-hover:ring-zinc-700 transition-all shadow-md flex items-center">
+                {/* Default minimal view */}
+                <span className="font-mono font-bold group-hover:hidden">
+                  {data.rate}/m
+                </span>
+                {/* Expanded hover view */}
+                <span className="hidden group-hover:inline-flex items-center gap-1.5 animate-fadeIn">
+                  <span className="font-bold text-zinc-200">{data.itemName}</span>
+                  <span className="text-zinc-600">•</span>
+                  <span className="font-mono text-emerald-400 font-bold">{data.rate}/min</span>
+                  <span className="text-zinc-600">•</span>
+                  <span className="rounded bg-zinc-800 px-1.5 py-0.2 text-[9px] text-zinc-400 font-semibold">{data.tierLabel}</span>
+                </span>
               </span>
             )}
             <button
@@ -67,7 +111,7 @@ export function BeltEdge(props: EdgeProps) {
                 e.stopPropagation();
                 setOpen((o) => !o);
               }}
-              className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-600 text-sm font-bold leading-none text-white opacity-0 shadow transition-opacity group-hover:opacity-100 data-[open=true]:opacity-100"
+              className="flex h-5 w-5 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 hover:bg-orange-600 text-zinc-300 hover:text-white text-xs font-bold leading-none opacity-0 shadow-lg transition-all group-hover:opacity-100 data-[open=true]:opacity-100 data-[open=true]:bg-orange-650"
               data-open={open}
             >
               +
