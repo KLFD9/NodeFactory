@@ -142,9 +142,18 @@ un MVP solide · mode édition manuelle avancée.
     **`isValidConnection`** (`src/graph/connection.ts`, pur + testé), **auto-layout ELK**
     (`src/graph/layout.ts`, `layered`/RIGHT, branché dans l'auto-génération), splitter/merger en
     **carré compact**.
-  - **Effort moyen (reste)** : arête custom `BeltEdge` + `EdgeLabelRenderer` (label HTML : icône item +
-    débit + tier coloré) ; `NodeToolbar` ; titre du node = item produit + icône (façon satisfactory-calculator).
+  - **Fait (suite)** : arête custom **`BeltEdge`** (`src/ui/edges/`, label HTML + bouton **+** au survol
+    → context-box « Insérer Splitter/Merger », coupe l'arête) ; **drop palette sur une arête** =
+    division auto (`dropBuildingNode(…, splitEdgeId)`, détecté via `domAttributes` `data-edge-id` +
+    `elementFromPoint`) ; **multi-sélection** clic-gauche glissé (`selectionOnDrag` + `panOnDrag=[1,2]`).
+    Splitter/merger = vrais hubs 3-voies (1→3 / 3→1), handles sur 3 faces.
+  - **Effort moyen (reste)** : `NodeToolbar` ; titre du node = item produit + icône (façon
+    satisfactory-calculator) ; icônes d'item dans le label d'arête.
   - **Plus tard** : helper lines au drag ; cross-highlight récap↔node.
+  - ⚠️ *Latent* : déposer une **machine** (pas un hub) sur une arête la branche sur `in-0/out-0`
+    génériques ; une fois la recette choisie, les handles deviennent `in-<item>/out-<item>` et ces
+    arêtes pendouillent. Le drop-sur-arête est pensé pour les **hubs logistiques** ; garde-fou possible
+    (n'autoriser la division qu'en catégorie `logistics`).
   - *Représentation N machines* : tension entre node agrégé (×N, un belt = total) et fidélité physique
     (1 node = 1 machine, belts + splitters/mergers réels). La fidélité complète (manifold/load-balanced)
     est la feature différenciante **rangée en v2** par le brief car elle exige la **propagation de flux

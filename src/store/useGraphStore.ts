@@ -52,6 +52,8 @@ interface GraphState {
   dropBuildingNode: (buildingId: string, position: XYPosition, category: string, splitEdgeId?: string | null) => void;
   /** Met à jour la config d'un node (recette, ressource, pureté…). */
   updateNodeData: (id: string, patch: Partial<MachineNodeData>) => void;
+  /** Supprime un node et ses arêtes connectées. */
+  deleteNode: (id: string) => void;
   selectNode: (id: string | null) => void;
   /** Remplace tout le graphe (utilisé par l'auto-génération depuis le solveur). */
   setGraph: (nodes: MachineNode[], edges: Edge[]) => void;
@@ -104,7 +106,9 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       };
 
       let newEdges = [...state.edges];
-      if (splitEdgeId) {
+      // Seuls les hubs logistiques (splitter/merger) coupent l'arête : eux gardent des
+      // handles in-0/out-0 stables. Une machine se configure ensuite en handles par item.
+      if (splitEdgeId && category === 'logistics') {
         const edgeToSplit = state.edges.find((e) => e.id === splitEdgeId);
         if (edgeToSplit) {
           // Remove the split edge
@@ -142,6 +146,13 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   updateNodeData: (id, patch) =>
     set((state) => ({
       nodes: state.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...patch } } : n)),
+    })),
+
+  deleteNode: (id) =>
+    set((state) => ({
+      nodes: state.nodes.filter((n) => n.id !== id),
+      edges: state.edges.filter((e) => e.source !== id && e.target !== id),
+      selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
     })),
 
   selectNode: (selectedNodeId) => set({ selectedNodeId }),

@@ -2,36 +2,44 @@ import type { Edge } from '@xyflow/react';
 import type { GameData } from '@/data/types';
 import type { MachineNode } from '@/store/useGraphStore';
 import type { SolveResult } from '@/solver';
+import { connectFlow, type Endpoint, type LogisticsSink } from './logistics';
 
 const COL_WIDTH = 320;
 const ROW_HEIGHT = 120;
 
-/** Capacités réelles des hubs logistiques Satisfactory. */
-const SPLITTER_OUTPUTS = 3; // 1 entrée → 3 sorties max
-const MERGER_INPUTS = 3; // 3 entrées max → 1 sortie
-
-interface Endpoint {
-  node: string;
-  handle: string;
+export interface BuiltGraph {
+  nodes: MachineNode[];
+  edges: Edge[];
+  /** Producteurs des items cibles non consommés en interne (à brancher sur l'existant). */
+  openOutputs: Map<string, Endpoint[]>;
 }
 
 /**
- * Transforme une solution du solveur en graphe React Flow **fidèle** : un node par
- * machine physique, reliées par des **arbres de splitters (1→3) / mergers (3→1)** réels.
- * Pour un fan-in/out > 3, les hubs sont chaînés. Calcul PUR. (La disposition fine est
- * ensuite confiée à ELK dans l'auto-génération ; les positions ici servent de repli/tests.)
+ * Transforme une solution du solveur en graphe React Flow **fidèle** : un node par machine
+ * physique, reliées par des **arbres de splitters (1→3) / mergers (3→1)** réels. `prefix`
+ * permet d'éviter les collisions d'ids quand on greffe le résultat sur un graphe existant
+ * (optimisation assistée). Calcul PUR. ELK affine ensuite la disposition.
  */
 export function buildGraphFromSolution(
   result: SolveResult,
   game: GameData,
-): { nodes: MachineNode[]; edges: Edge[] } {
+  prefix = '',
+): BuiltGraph {
   const recipeById = new Map(game.recipes.map((r) => [r.id, r]));
   const isRaw = (id: string) => game.items.find((i) => i.id === id)?.raw ?? false;
   const nodes: MachineNode[] = [];
   const edges: Edge[] = [];
   let eid = 0;
+  let hub = 0;
+  let hubX = 0;
   const edge = (src: Endpoint, dst: Endpoint) =>
-    edges.push({ id: `e${eid++}`, source: src.node, sourceHandle: src.handle, target: dst.node, targetHandle: dst.handle });
+    edges.push({ id: `${prefix}e${eid++}`, source: src.node, sourceHandle: src.handle, target: dst.node, targetHandle: dst.handle });
+  const sink: LogisticsSink = {
+    pushNode: (n) => nodes.push(n),
+    pushEdge: edge,
+    hubId: () => `${prefix}hub-${hub++}`,
+    hubPosition: () => ({ x: hubX, y: 0 }),
+  };
 
   // Profondeur (couche) de chaque sélection selon ses ingrédients non bruts.
   const producersOfSel = new Map<string, number[]>();
@@ -72,7 +80,7 @@ export function buildGraphFromSolution(
     const layer = layerOf(idx);
     selLayer[idx] = layer;
     for (let k = 0; k < s.machineCount; k++) {
-      const id = `m-${idx}-${k}`;
+      const id = `${prefix}m-${idx}-${k}`;
       nodes.push({
         id,
         type: 'machine',
@@ -86,76 +94,24 @@ export function buildGraphFromSolution(
     }
   });
 
-  // Découpe un tableau en `k` groupes contigus à peu près égaux.
-  const partition = <T,>(arr: T[], k: number): T[][] => {
-    const groups: T[][] = [];
-    const size = Math.ceil(arr.length / k);
-    for (let i = 0; i < arr.length; i += size) groups.push(arr.slice(i, i + size));
-    return groups;
-  };
-
-  // Arbre de mergers (3 entrées max) : combine N sources en une seule sortie.
-  let hubId = 0;
-  const hubX = new Map<string, number>(); // x indicatif par item
-  const mergeInputs = (item: string, sources: Endpoint[]): Endpoint => {
-    let level = sources;
-    while (level.length > 1) {
-      const next: Endpoint[] = [];
-      for (let i = 0; i < level.length; i += MERGER_INPUTS) {
-        const chunk = level.slice(i, i + MERGER_INPUTS);
-        if (chunk.length === 1) {
-          next.push(chunk[0]);
-          continue;
-        }
-        const mg = `mg-${item}-${hubId++}`;
-        nodes.push({
-          id: mg,
-          type: 'machine',
-          position: { x: hubX.get(item) ?? 0, y: 0 },
-          data: { buildingId: 'merger', portsIn: chunk.length, portsOut: 1 },
-        });
-        chunk.forEach((src, k) => edge(src, { node: mg, handle: `in-${k}` }));
-        next.push({ node: mg, handle: 'out-0' });
-      }
-      level = next;
-    }
-    return level[0];
-  };
-
-  // Arbre de splitters (3 sorties max) : distribue une source vers N consommateurs.
-  const splitOutput = (item: string, src: Endpoint, consumers: Endpoint[]) => {
-    if (consumers.length === 1) {
-      edge(src, consumers[0]);
-      return;
-    }
-    const branches = Math.min(SPLITTER_OUTPUTS, consumers.length);
-    const sp = `sp-${item}-${hubId++}`;
-    nodes.push({
-      id: sp,
-      type: 'machine',
-      position: { x: (hubX.get(item) ?? 0) + COL_WIDTH * 0.4, y: 0 },
-      data: { buildingId: 'splitter', portsIn: 1, portsOut: branches },
-    });
-    edge(src, { node: sp, handle: 'in-0' });
-    partition(consumers, branches).forEach((group, i) =>
-      splitOutput(item, { node: sp, handle: `out-${i}` }, group),
-    );
-  };
-
+  // Relie producteurs → consommateurs par item (arbres de hubs). Les items sans
+  // consommateur interne (cibles) restent en sorties ouvertes.
+  const openOutputs = new Map<string, Endpoint[]>();
   for (const [item, producers] of producersByItem) {
     const consumers = consumersByItem.get(item);
-    if (!consumers || consumers.length === 0) continue;
-    const prodLayer = Math.max(...producers.map((id) => selLayer[Number(id.split('-')[1])] ?? 0));
-    hubX.set(item, (prodLayer + 0.5) * COL_WIDTH);
-
-    const bus = mergeInputs(
-      item,
-      producers.map((p) => ({ node: p, handle: `out-${item}` })),
+    const producerEndpoints = producers.map((p) => ({ node: p, handle: `out-${item}` }));
+    if (!consumers || consumers.length === 0) {
+      openOutputs.set(item, producerEndpoints);
+      continue;
+    }
+    const prodLayer = Math.max(
+      ...producers.map((id) => selLayer[Number(id.replace(prefix, '').split('-')[1])] ?? 0),
     );
-    splitOutput(
-      item,
-      bus,
+    hubX = (prodLayer + 0.5) * COL_WIDTH;
+    connectFlow(
+      producerEndpoints,
       consumers.map((c) => ({ node: c, handle: `in-${item}` })),
+      sink,
     );
   }
 
@@ -168,5 +124,5 @@ export function buildGraphFromSolution(
     n.position = { x: n.position.x, y: row * ROW_HEIGHT };
   }
 
-  return { nodes, edges };
+  return { nodes, edges, openOutputs };
 }

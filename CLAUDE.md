@@ -68,8 +68,14 @@ fait la **propagation de flux** à travers ces hubs (merger = somme, splitter = 
 item (carrés), badge ×N (mode manuel encore agrégé — à terme remplacé par copié-collé). Hubs = nodes
 `buildingId: 'merger'|'splitter'` avec `portsIn/portsOut` dynamiques.
 
-**Prochaine étape : optimisation assistée d'un graphe manuel existant.** Le solveur est prêt ;
-il faut transmettre les recettes/machines déjà posées comme **contraintes fixées** (bornes `GLP_LO`/
-`GLP_FX`) et présenter le delta. Backlog UX node : `BeltEdge` (label HTML + icône), `isValidConnection`,
-`NodeToolbar`, auto-layout ELK, copié-collé de nodes. Persistance + partage URL = fin de projet.
-Données réelles : agent prêt, accès web autorisé — rester sur le mock pour l'instant (décision user).
+**Optimisation assistée faite** : `src/graph/assist.ts` `completeFactory` (« Compléter l'usine ») —
+lit les déficits du graphe manuel, `solveDemands` (multi-cibles) calcule l'amont, `buildGraphFromSolution`
+(préfixe `opt-`) le génère, et `connectFlow` (`src/graph/logistics.ts`, arbres merger/splitter 3-voies
+partagés) le branche sur les consommateurs existants. Bouton dans `FactorySummaryPanel`.
+
+Faits aussi : `BeltEdge` (label + bouton « + » → insérer hub), drop/insertion de hub sur arête,
+multi-sélection, `isValidConnection`, ELK lazy, copié-collé, `NodeToolbar` (dupliquer/supprimer),
+splitters/mergers carrés 3-voies. **31→33 tests verts.**
+
+**Reste** : persistance locale + partage URL (tests 11-12, fin de projet) ; polish (icônes d'item,
+helper lines) ; données réelles 1.0 (agent prêt, accès web autorisé — rester sur le mock pour l'instant).

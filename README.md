@@ -68,7 +68,8 @@ du LP et calculée sur le graphe.
 - [x] Éditeur de nœuds manuel (palette par catégorie, drag & drop, inspecteur, multiplicateur)
 - [x] Couche de calcul du graphe (machines, énergie, bilan matière, tiering convoyeur) + tests
 - [x] Solveur LP (glpk.js) + auto-génération du graphe depuis une cible (tests 1-7)
-- [ ] Optimisation assistée d'un graphe manuel existant (recettes forcées en contraintes)
+- [x] Splitters/mergers réels (arbres 3-voies), propagation de flux, insertion sur arête (+/drop)
+- [x] Optimisation assistée : « Compléter l'usine » (comble les déficits, greffe + branche l'amont)
 - [ ] Persistance locale + partage URL (tests 11-12)
 
 ## Licence

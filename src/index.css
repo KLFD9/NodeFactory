@@ -11,3 +11,56 @@ body,
   height: 100%;
   margin: 0;
 }
+
+/* ── Micro-interactions « juicy » sur l'éditeur ─────────────────────────── */
+
+/* Pads (handles) : grossissent et s'illuminent au survol, comme des points de snap. */
+.react-flow__handle {
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+.react-flow__handle:hover {
+  transform: scale(1.6);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.35);
+  z-index: 10;
+}
+
+/* Pad en cours de connexion : halo de validité. */
+.react-flow__handle.connectingfrom,
+.react-flow__handle.connectingto {
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.45);
+}
+
+/* Nodes : transition douce + léger soulèvement au survol. */
+.react-flow__node {
+  transition:
+    filter 120ms ease,
+    transform 120ms ease;
+}
+.react-flow__node:hover {
+  filter: brightness(1.08);
+}
+
+/* Traces (convoyeurs) : épaississement au survol pour les repérer. */
+.react-flow__edge-path {
+  transition: stroke-width 120ms ease;
+}
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke-width: 5;
+}
+
+/* Animation d'apparition des nodes (placement). */
+@keyframes nf-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.react-flow__node {
+  animation: nf-pop 140ms ease;
+}

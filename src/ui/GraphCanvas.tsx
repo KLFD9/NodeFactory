@@ -17,6 +17,7 @@ import { useGraphStore } from '@/store/useGraphStore';
 import { computeFactory } from '@/graph/computeFactory';
 import { isValidGraphConnection } from '@/graph/connection';
 import { MachineNode } from './nodes/MachineNode';
+import { BeltEdge } from './edges/BeltEdge';
 import { PALETTE_MIME } from './Palette';
 
 /** Couleur d'arête par tier de convoyeur (Mk1..Mk6). */
@@ -45,6 +46,7 @@ function Flow() {
   const duplicateSelection = useGraphStore((s) => s.duplicateSelection);
   const { screenToFlowPosition, fitView } = useReactFlow();
   const nodeTypes = useMemo<NodeTypes>(() => ({ machine: MachineNode }), []);
+  const edgeTypes = useMemo(() => ({ belt: BeltEdge }), []);
 
   // Recentre le canvas après chaque auto-génération.
   useEffect(() => {
@@ -69,43 +71,32 @@ function Flow() {
     return () => window.removeEventListener('keydown', onKey);
   }, [copySelection, paste, duplicateSelection]);
 
-  // Décore les arêtes : libellé débit + item, couleur par tier, rouge pointillé si surcharge.
+  // Décore les arêtes (type custom « belt ») : couleur/flèche par tier, données pour le label.
   const styledEdges = useMemo(() => {
+    // `data-edge-id` sert à retrouver l'arête sous le curseur lors d'un drop (cast : les
+    // attributs data-* custom ne sont pas dans le type SVGAttributes de domAttributes).
+    const domAttributes = (id: string) =>
+      ({ 'data-edge-id': id }) as unknown as React.SVGAttributes<SVGGElement>;
     if (!gameData) {
-      return edges.map((e) => ({
-        ...e,
-        type: 'smoothstep',
-        pathOptions: { borderRadius: 12 },
-        domAttributes: { 'data-edge-id': e.id } as any,
-      }));
+      return edges.map((e) => ({ ...e, type: 'belt', domAttributes: domAttributes(e.id) }));
     }
     const plans = new Map(computeFactory(nodes, edges, gameData).edges.map((p) => [p.edgeId, p]));
     return edges.map((e) => {
       const plan = plans.get(e.id);
       if (!plan || plan.itemId == null) {
-        return {
-          ...e,
-          type: 'smoothstep',
-          pathOptions: { borderRadius: 12 },
-          domAttributes: { 'data-edge-id': e.id } as any,
-        };
+        return { ...e, type: 'belt', domAttributes: domAttributes(e.id) };
       }
       const overloaded = plan.belt.overloaded;
       const color = overloaded ? '#ef4444' : (TIER_COLOR[plan.belt.tier ?? 1] ?? '#9ca3af');
       const tierLabel = overloaded ? `${plan.belt.lines}×Mk${plan.belt.tier}` : `Mk${plan.belt.tier}`;
       return {
         ...e,
-        type: 'smoothstep',
-        pathOptions: { borderRadius: 12 },
+        type: 'belt',
         animated: true,
-        domAttributes: { 'data-edge-id': e.id } as any,
-        label: `${plan.itemName} · ${plan.ratePerMin}/min · ${tierLabel}`,
+        domAttributes: domAttributes(e.id),
         markerEnd: { type: MarkerType.ArrowClosed, color, width: 18, height: 18 },
         style: { stroke: color, strokeWidth: 3, strokeDasharray: overloaded ? '8 4' : undefined },
-        labelStyle: { fill: '#fafafa', fontSize: 11, fontWeight: 600 },
-        labelBgStyle: { fill: '#09090b', fillOpacity: 0.9 },
-        labelBgPadding: [6, 3] as [number, number],
-        labelBgBorderRadius: 4,
+        data: { itemName: plan.itemName, rate: plan.ratePerMin, tierLabel, color },
       };
     });
   }, [nodes, edges, gameData]);
@@ -155,6 +146,7 @@ function Flow() {
         nodes={nodes}
         edges={styledEdges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
@@ -163,12 +155,13 @@ function Flow() {
         connectionLineType={ConnectionLineType.SmoothStep}
         selectionOnDrag={true}
         panOnDrag={[1, 2]}
+        snapToGrid={true}
+        snapGrid={[16, 16]}
         defaultEdgeOptions={{
-          type: 'smoothstep',
+          type: 'belt',
           markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
           style: { strokeWidth: 3 },
-          pathOptions: { borderRadius: 12 },
-        } as any}
+        }}
         fitView
         proOptions={{ hideAttribution: true }}
       >

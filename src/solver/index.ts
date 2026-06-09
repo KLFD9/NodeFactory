@@ -72,16 +72,34 @@ function objectiveCoef(recipe: Recipe, objective: Objective, data: GameData): nu
  * Fonction PURE et DÉTERMINISTE (hors chargement WASM), sans dépendance UI.
  */
 export async function solveFactory(request: SolveRequest): Promise<SolveResult> {
-  const { data, targetItem, targetRate, objective } = request;
-
-  if (!data.items.some((i) => i.id === targetItem)) {
-    throw new SolverError(`Item cible inconnu : "${targetItem}".`);
+  if (!request.data.items.some((i) => i.id === request.targetItem)) {
+    throw new SolverError(`Item cible inconnu : "${request.targetItem}".`);
   }
-  if (targetRate <= 0) {
+  return solveDemands(
+    request.data,
+    new Map([[request.targetItem, request.targetRate]]),
+    request.objective,
+    request.allowedAlternates,
+  );
+}
+
+/**
+ * Variante multi-cibles : résout plusieurs demandes (item → débit/min) en une seule passe,
+ * en partageant les intermédiaires. Sert l'optimisation assistée (combler tous les déficits
+ * d'un graphe manuel d'un coup). Même formulation LP que `solveFactory`.
+ */
+export async function solveDemands(
+  data: GameData,
+  demands: Map<string, number>,
+  objective: Objective,
+  allowedAlternates?: string[],
+): Promise<SolveResult> {
+  const active = new Map([...demands].filter(([, rate]) => rate > 0));
+  if (active.size === 0) {
     return { selections: [], rawInputs: [], surplus: [], totalPowerMW: 0, totalMachines: 0 };
   }
 
-  const recipes = candidateRecipes(data, request.allowedAlternates);
+  const recipes = candidateRecipes(data, allowedAlternates);
   const rawSet = new Set(data.items.filter((i) => i.raw).map((i) => i.id));
   const glpk = await getGlpk();
 
@@ -95,22 +113,20 @@ export async function solveFactory(request: SolveRequest): Promise<SolveResult> 
 
   const subjectTo: LP['subjectTo'] = [];
 
-  // Contrainte de demande sur l'item cible.
-  const demandVars = recipes
-    .map((r, i) => ({ name: varName(i), coef: netPerCycle(r, targetItem) }))
-    .filter((v) => v.coef !== 0);
-  if (demandVars.length === 0) {
-    throw new SolverError(`Aucune recette ne produit "${targetItem}" : cible infaisable.`);
+  // Contrainte de demande pour chaque item cible.
+  for (const [item, rate] of active) {
+    const vars = recipes
+      .map((r, i) => ({ name: varName(i), coef: netPerCycle(r, item) }))
+      .filter((v) => v.coef !== 0);
+    if (vars.length === 0) {
+      throw new SolverError(`Aucune recette ne produit "${item}" : cible infaisable.`);
+    }
+    subjectTo.push({ name: `demand_${item}`, vars, bnds: { type: glpk.GLP_LO, lb: rate, ub: 0 } });
   }
-  subjectTo.push({
-    name: 'demand',
-    vars: demandVars,
-    bnds: { type: glpk.GLP_LO, lb: targetRate, ub: 0 },
-  });
 
-  // Bilans des items intermédiaires (ni bruts, ni cible).
+  // Bilans des items intermédiaires (ni bruts, ni cibles).
   for (const item of data.items) {
-    if (item.raw || item.id === targetItem) continue;
+    if (item.raw || active.has(item.id)) continue;
     const vars = recipes
       .map((r, i) => ({ name: varName(i), coef: netPerCycle(r, item.id) }))
       .filter((v) => v.coef !== 0);
@@ -133,9 +149,8 @@ export async function solveFactory(request: SolveRequest): Promise<SolveResult> 
   }
   const { status, vars } = res.result;
   if (status !== glpk.GLP_OPT && status !== glpk.GLP_FEAS) {
-    throw new SolverError(
-      `Cible infaisable : impossible de produire ${targetRate}/min de "${targetItem}".`,
-    );
+    const labels = [...active].map(([i, r]) => `${r}/min de "${i}"`).join(', ');
+    throw new SolverError(`Cible infaisable : impossible de produire ${labels}.`);
   }
 
   // Reconstruction de la solution.
@@ -183,7 +198,7 @@ export async function solveFactory(request: SolveRequest): Promise<SolveResult> 
       if (rates[i] <= EPS) return;
       net += netPerCycle(recipe, item.id) * rates[i];
     });
-    const expected = item.id === targetItem ? targetRate : 0;
+    const expected = active.get(item.id) ?? 0;
     const extra = round(net - expected);
     if (extra > EPS) surplus.push({ item: item.id, rate: extra });
   }
