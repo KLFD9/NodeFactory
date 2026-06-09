@@ -48,6 +48,8 @@ interface GraphState {
 
   /** Pose un nouveau node de bâtiment à la position donnée (drop palette). */
   addBuildingNode: (buildingId: string, position: XYPosition, category: string) => void;
+  /** Pose un nouveau node de bâtiment et divise éventuellement une arête existante. */
+  dropBuildingNode: (buildingId: string, position: XYPosition, category: string, splitEdgeId?: string | null) => void;
   /** Met à jour la config d'un node (recette, ressource, pureté…). */
   updateNodeData: (id: string, patch: Partial<MachineNodeData>) => void;
   selectNode: (id: string | null) => void;
@@ -89,6 +91,52 @@ export const useGraphStore = create<GraphState>((set, get) => ({
         data: { buildingId, ...(category === 'extraction' ? { purity: 'normal' as Purity } : {}) },
       };
       return { nodes: [...state.nodes, node], selectedNodeId: id };
+    }),
+
+  dropBuildingNode: (buildingId, position, category, splitEdgeId) =>
+    set((state) => {
+      const id = nextId();
+      const node: MachineNode = {
+        id,
+        type: 'machine',
+        position,
+        data: { buildingId, ...(category === 'extraction' ? { purity: 'normal' as Purity } : {}) },
+      };
+
+      let newEdges = [...state.edges];
+      if (splitEdgeId) {
+        const edgeToSplit = state.edges.find((e) => e.id === splitEdgeId);
+        if (edgeToSplit) {
+          // Remove the split edge
+          newEdges = newEdges.filter((e) => e.id !== splitEdgeId);
+
+          // Add edge from source to new node input (in-0)
+          const edge1Id = `e-${nextId()}`;
+          newEdges.push({
+            id: edge1Id,
+            source: edgeToSplit.source,
+            sourceHandle: edgeToSplit.sourceHandle,
+            target: id,
+            targetHandle: 'in-0',
+          });
+
+          // Add edge from new node output (out-0) to target
+          const edge2Id = `e-${nextId()}`;
+          newEdges.push({
+            id: edge2Id,
+            source: id,
+            sourceHandle: 'out-0',
+            target: edgeToSplit.target,
+            targetHandle: edgeToSplit.targetHandle,
+          });
+        }
+      }
+
+      return {
+        nodes: [...state.nodes, node],
+        edges: newEdges,
+        selectedNodeId: id,
+      };
     }),
 
   updateNodeData: (id, patch) =>

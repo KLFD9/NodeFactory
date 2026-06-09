@@ -7,12 +7,15 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  ConnectionLineType,
   type NodeTypes,
   type OnSelectionChangeParams,
 } from '@xyflow/react';
+import type { IsValidConnection } from '@xyflow/react';
 import { useFactoryStore } from '@/store/useFactoryStore';
 import { useGraphStore } from '@/store/useGraphStore';
 import { computeFactory } from '@/graph/computeFactory';
+import { isValidGraphConnection } from '@/graph/connection';
 import { MachineNode } from './nodes/MachineNode';
 import { PALETTE_MIME } from './Palette';
 
@@ -33,7 +36,7 @@ function Flow() {
   const onNodesChange = useGraphStore((s) => s.onNodesChange);
   const onEdgesChange = useGraphStore((s) => s.onEdgesChange);
   const onConnect = useGraphStore((s) => s.onConnect);
-  const addBuildingNode = useGraphStore((s) => s.addBuildingNode);
+  const dropBuildingNode = useGraphStore((s) => s.dropBuildingNode);
   const selectNode = useGraphStore((s) => s.selectNode);
 
   const generation = useGraphStore((s) => s.generation);
@@ -68,17 +71,34 @@ function Flow() {
 
   // Décore les arêtes : libellé débit + item, couleur par tier, rouge pointillé si surcharge.
   const styledEdges = useMemo(() => {
-    if (!gameData) return edges;
+    if (!gameData) {
+      return edges.map((e) => ({
+        ...e,
+        type: 'smoothstep',
+        pathOptions: { borderRadius: 12 },
+        domAttributes: { 'data-edge-id': e.id } as any,
+      }));
+    }
     const plans = new Map(computeFactory(nodes, edges, gameData).edges.map((p) => [p.edgeId, p]));
     return edges.map((e) => {
       const plan = plans.get(e.id);
-      if (!plan || plan.itemId == null) return e;
+      if (!plan || plan.itemId == null) {
+        return {
+          ...e,
+          type: 'smoothstep',
+          pathOptions: { borderRadius: 12 },
+          domAttributes: { 'data-edge-id': e.id } as any,
+        };
+      }
       const overloaded = plan.belt.overloaded;
       const color = overloaded ? '#ef4444' : (TIER_COLOR[plan.belt.tier ?? 1] ?? '#9ca3af');
       const tierLabel = overloaded ? `${plan.belt.lines}×Mk${plan.belt.tier}` : `Mk${plan.belt.tier}`;
       return {
         ...e,
+        type: 'smoothstep',
+        pathOptions: { borderRadius: 12 },
         animated: true,
+        domAttributes: { 'data-edge-id': e.id } as any,
         label: `${plan.itemName} · ${plan.ratePerMin}/min · ${tierLabel}`,
         markerEnd: { type: MarkerType.ArrowClosed, color, width: 18, height: 18 },
         style: { stroke: color, strokeWidth: 3, strokeDasharray: overloaded ? '8 4' : undefined },
@@ -102,14 +122,31 @@ function Flow() {
       if (!raw) return;
       const { buildingId, category } = JSON.parse(raw) as { buildingId: string; category: string };
       const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-      addBuildingNode(buildingId, position, category);
+
+      // Détection de l'arête sous le curseur au moment du drop
+      const element = document.elementFromPoint(e.clientX, e.clientY);
+      let edgeEl = element;
+      while (edgeEl && !edgeEl.getAttribute('data-edge-id') && edgeEl !== document.body) {
+        edgeEl = edgeEl.parentElement;
+      }
+      const droppedEdgeId = edgeEl ? edgeEl.getAttribute('data-edge-id') : null;
+
+      dropBuildingNode(buildingId, position, category, droppedEdgeId);
     },
-    [addBuildingNode, screenToFlowPosition],
+    [dropBuildingNode, screenToFlowPosition],
   );
 
   const onSelectionChange = useCallback(
     ({ nodes: sel }: OnSelectionChangeParams) => selectNode(sel[0]?.id ?? null),
     [selectNode],
+  );
+
+  const isValidConnection = useCallback<IsValidConnection>(
+    (c) => {
+      const state = useGraphStore.getState();
+      return gameData ? isValidGraphConnection(c, state.edges, state.nodes, gameData) : true;
+    },
+    [gameData],
   );
 
   return (
@@ -122,10 +159,16 @@ function Flow() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onSelectionChange={onSelectionChange}
+        isValidConnection={isValidConnection}
+        connectionLineType={ConnectionLineType.SmoothStep}
+        selectionOnDrag={true}
+        panOnDrag={[1, 2]}
         defaultEdgeOptions={{
+          type: 'smoothstep',
           markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
           style: { strokeWidth: 3 },
-        }}
+          pathOptions: { borderRadius: 12 },
+        } as any}
         fitView
         proOptions={{ hideAttribution: true }}
       >

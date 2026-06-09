@@ -136,16 +136,15 @@ un MVP solide · mode édition manuelle avancée.
   Plate / Iron Rod / Cast Screw…). Réduit la friction du mode manuel sans imposer de jargon. Réutilise
   `computeNodeInfo` (sorties du node) + un index « item → recettes qui le consomment ».
 - *Améliorations React Flow* (issues d'une recherche dédiée, par priorité) :
-  - **Fait** : handles par item (`out-<item>`/`in-<item>`), routage des arêtes par handle dans
-    `computeFactory`, flèches `markerEnd`, MiniMap, badge ×N, lazy-load glpk.
-  - **Effort moyen** : arête custom `BeltEdge` + `EdgeLabelRenderer` (label HTML riche : icône item +
-    débit + tier coloré) ; `isValidConnection` (anti self-loop, port d'entrée déjà occupé, item
-    compatible) ; `NodeToolbar` pour +/− machines et suppression contextuelle ; titre du node = item
-    produit + icône (façon satisfactory-calculator).
-  - **Plus tard** : auto-layout **ELK (`elkjs`, algo `layered`, direction RIGHT)** en remplacement du
-    placement grille de `buildGraphFromSolution` ; helper lines au drag ; cross-highlight récap↔node ;
-    propagation de flux à travers splitters/mergers (logistique implicite sur les liens) ;
-    **copié-collé de nodes** (Ctrl/Cmd+C/V, duplication) — demandé, bon pour l'interaction.
+  - **Fait** : handles carrés par item (`out-<item>`/`in-<item>`), routage des arêtes par handle +
+    **propagation de flux** dans `computeFactory` (merger/splitter), flèches `markerEnd`, MiniMap,
+    lazy-load glpk **et ELK**, **copié-collé** (`src/store` : Cmd/Ctrl+C/V/D + bouton Dupliquer),
+    **`isValidConnection`** (`src/graph/connection.ts`, pur + testé), **auto-layout ELK**
+    (`src/graph/layout.ts`, `layered`/RIGHT, branché dans l'auto-génération), splitter/merger en
+    **carré compact**.
+  - **Effort moyen (reste)** : arête custom `BeltEdge` + `EdgeLabelRenderer` (label HTML : icône item +
+    débit + tier coloré) ; `NodeToolbar` ; titre du node = item produit + icône (façon satisfactory-calculator).
+  - **Plus tard** : helper lines au drag ; cross-highlight récap↔node.
   - *Représentation N machines* : tension entre node agrégé (×N, un belt = total) et fidélité physique
     (1 node = 1 machine, belts + splitters/mergers réels). La fidélité complète (manifold/load-balanced)
     est la feature différenciante **rangée en v2** par le brief car elle exige la **propagation de flux

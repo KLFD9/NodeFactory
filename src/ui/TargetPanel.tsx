@@ -34,11 +34,13 @@ export function TargetPanel() {
     setBusy(true);
     setError(null);
     try {
-      // glpk.js (WASM) chargé à la demande : il reste hors du bundle initial.
+      // glpk.js (WASM) + ELK chargés à la demande : hors du bundle initial.
       const { solveFactory } = await import('@/solver');
       const result = await solveFactory({ data: gameData, targetItem, targetRate, objective });
       const { nodes, edges } = buildGraphFromSolution(result, gameData);
-      setGraph(nodes, edges);
+      const { layoutGraph } = await import('@/graph/layout');
+      const laidOut = await layoutGraph(nodes, edges);
+      setGraph(laidOut, edges);
     } catch (err) {
       const isSolverError = err instanceof Error && err.name === 'SolverError';
       setError(isSolverError ? (err as Error).message : `Échec du calcul : ${String(err)}`);

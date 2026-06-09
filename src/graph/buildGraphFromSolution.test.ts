@@ -30,7 +30,7 @@ describe('buildGraphFromSolution (1 node = 1 machine + logistique)', () => {
     expect(ingotMachines[0].position.x).toBeLessThan(plateMachines[0].position.x);
   });
 
-  it('propage les flux à travers le merger/splitter (débits corrects par arête)', async () => {
+  it('propage les flux à travers merger(3→1)/splitter(1→3) (débits par arête)', async () => {
     const result = await solveFactory({
       data: game,
       targetItem: 'iron-plate',
@@ -38,22 +38,30 @@ describe('buildGraphFromSolution (1 node = 1 machine + logistique)', () => {
       objective: 'raw-resources',
     });
     const { nodes, edges } = buildGraphFromSolution(result, game);
-    const summary = computeFactory(nodes, edges, game);
-    const plans = summary.edges;
+    const plans = computeFactory(nodes, edges, game).edges;
 
-    // Lingot → merger : 30/min chacun (Mk1).
-    const toMerger = plans.filter((p) => /^e-m-\d/.test(p.edgeId));
-    expect(toMerger.length).toBe(3);
-    expect(toMerger.every((p) => p.ratePerMin === 30 && p.itemId === 'iron-ingot')).toBe(true);
+    // 3 lingots → merger (3×30/min) + splitter → 3 plaques (3×30/min) = 6 arêtes à 30/min.
+    const at30 = plans.filter((p) => p.ratePerMin === 30 && p.itemId === 'iron-ingot');
+    expect(at30.length).toBe(6);
 
-    // merger → splitter : 90/min agrégés (Mk2).
-    const bus = plans.find((p) => p.edgeId.startsWith('e-mg-'));
-    expect(bus?.ratePerMin).toBe(90);
-    expect(bus?.belt.tier).toBe(2);
+    // Le bus merger → splitter agrège 90/min (Mk2).
+    const bus = plans.filter((p) => p.ratePerMin === 90 && p.itemId === 'iron-ingot');
+    expect(bus.length).toBe(1);
+    expect(bus[0].belt.tier).toBe(2);
+  });
 
-    // splitter → plaques : 30/min chacun (Mk1).
-    const fromSplitter = plans.filter((p) => p.edgeId.startsWith('e-sp-'));
-    expect(fromSplitter.length).toBe(3);
-    expect(fromSplitter.every((p) => p.ratePerMin === 30)).toBe(true);
+  it('respecte les capacités : merger ≤ 3 entrées, splitter ≤ 3 sorties', async () => {
+    // 60 vis/min via Cast Screw : agrège beaucoup de machines → arbres de hubs.
+    const result = await solveFactory({
+      data: game,
+      targetItem: 'reinforced-iron-plate',
+      targetRate: 30,
+      objective: 'machines',
+    });
+    const { nodes } = buildGraphFromSolution(result, game);
+    for (const n of nodes) {
+      if (n.data.buildingId === 'merger') expect(n.data.portsIn ?? 0).toBeLessThanOrEqual(3);
+      if (n.data.buildingId === 'splitter') expect(n.data.portsOut ?? 0).toBeLessThanOrEqual(3);
+    }
   });
 });

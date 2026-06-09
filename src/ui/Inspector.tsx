@@ -15,6 +15,7 @@ export function Inspector() {
   const selectedNodeId = useGraphStore((s) => s.selectedNodeId);
   const node = useGraphStore((s) => s.nodes.find((n) => n.id === s.selectedNodeId));
   const updateNodeData = useGraphStore((s) => s.updateNodeData);
+  const duplicateSelection = useGraphStore((s) => s.duplicateSelection);
 
   if (!gameData || !selectedNodeId || !node) {
     return (
@@ -29,9 +30,7 @@ export function Inspector() {
   const building = info.building;
   if (!building) return null;
 
-  const count = Math.max(1, node.data.count ?? 1);
   const round = (n: number) => Math.round(n * 1000) / 1000;
-
   const rawItems = gameData.items.filter((i) => i.raw);
   const recipes = recipesForBuilding(building.id, gameData);
 
@@ -60,24 +59,6 @@ export function Inspector() {
           )}
         </div>
       </div>
-
-      {building.category !== 'logistics' && (
-        <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-400">
-            Nombre de machines
-          </label>
-          <input
-            type="number"
-            min={1}
-            step={1}
-            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm"
-            value={node.data.count ?? 1}
-            onChange={(e) =>
-              updateNodeData(node.id, { count: Math.max(1, Math.floor(Number(e.target.value) || 1)) })
-            }
-          />
-        </div>
-      )}
 
       {building.category === 'extraction' && (
         <div className="flex flex-col gap-3">
@@ -139,16 +120,14 @@ export function Inspector() {
 
       {(info.inputs.length > 0 || info.outputs.length > 0) && (
         <div className="rounded-md border border-zinc-800 p-2 text-xs">
-          <div className="mb-1.5 text-[10px] text-zinc-500">
-            Débits totaux (×{count} machine{count > 1 ? 's' : ''})
-          </div>
+          <div className="mb-1.5 text-[10px] text-zinc-500">Débits (1 machine)</div>
           {info.inputs.length > 0 && (
             <div className="mb-2">
               <div className="mb-1 text-[11px] uppercase tracking-wide text-zinc-500">Entrées</div>
               {info.inputs.map((f) => (
                 <div key={f.itemId} className="flex justify-between text-zinc-300">
                   <span>{f.itemName}</span>
-                  <span>{round(f.ratePerMin * count)}/min</span>
+                  <span>{round(f.ratePerMin)}/min</span>
                 </div>
               ))}
             </div>
@@ -157,11 +136,20 @@ export function Inspector() {
           {info.outputs.map((f) => (
             <div key={f.itemId} className="flex justify-between text-zinc-300">
               <span>{f.itemName}</span>
-              <span>{round(f.ratePerMin * count)}/min</span>
+              <span>{round(f.ratePerMin)}/min</span>
             </div>
           ))}
         </div>
       )}
+
+      <button
+        type="button"
+        onClick={() => duplicateSelection()}
+        className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:border-zinc-500"
+        title="Dupliquer ce node (Cmd/Ctrl+D)"
+      >
+        Dupliquer
+      </button>
     </div>
   );
 }
