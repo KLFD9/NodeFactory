@@ -4,8 +4,9 @@ import {
   Controls,
   MarkerType,
   MiniMap,
+  Panel,
   ReactFlow,
-  ReactFlowProvider,
+  ViewportPortal,
   useReactFlow,
   ConnectionLineType,
   type Connection,
@@ -14,14 +15,25 @@ import {
 } from '@xyflow/react';
 import type { IsValidConnection } from '@xyflow/react';
 import { useFactoryStore } from '@/store/useFactoryStore';
-import { useGraphStore } from '@/store/useGraphStore';
+import { useGraphStore, type MachineNode as MachineNodeType } from '@/store/useGraphStore';
+import { useWorldStore } from '@/store/useWorldStore';
+import { ResourceLayer } from './world/ResourceLayer';
 import { computeFactory } from '@/graph/computeFactory';
 import { computeNodeInfo } from '@/graph/nodeInfo';
 import { isValidGraphConnection } from '@/graph/connection';
+import { computePowerNetworks, isPowerSourceHandle, isPowerTargetHandle } from '@/graph/power';
 import { MachineNode } from './nodes/MachineNode';
 import { BeltEdge } from './edges/BeltEdge';
+import { PowerEdge } from './edges/PowerEdge';
 import { PALETTE_MIME } from './Palette';
-import { NodeFlowContext, type NodeActualFlow } from './NodeFlowContext';
+import {
+  NodeFlowContext,
+  PowerContext,
+  PowerConnectionsContext,
+  PowerNetworkContext,
+  type NodeActualFlow,
+  type PowerNetworkInfo,
+} from './NodeFlowContext';
 
 /** Couleur d'arête par tier de convoyeur (Mk1..Mk6). */
 const TIER_COLOR: Record<number, string> = {
@@ -43,6 +55,10 @@ function Flow() {
   const updateNodeData = useGraphStore((s) => s.updateNodeData);
   const dropBuildingNode = useGraphStore((s) => s.dropBuildingNode);
   const selectNode = useGraphStore((s) => s.selectNode);
+  const snapMinerToPin = useGraphStore((s) => s.snapMinerToPin);
+  const unbindMiner = useGraphStore((s) => s.unbindMiner);
+  const deposits = useWorldStore((s) => s.deposits);
+  const regenerate = useWorldStore((s) => s.regenerate);
 
   const generation = useGraphStore((s) => s.generation);
   const copySelection = useGraphStore((s) => s.copySelection);
@@ -50,7 +66,7 @@ function Flow() {
   const duplicateSelection = useGraphStore((s) => s.duplicateSelection);
   const { screenToFlowPosition, fitView } = useReactFlow();
   const nodeTypes = useMemo<NodeTypes>(() => ({ machine: MachineNode }), []);
-  const edgeTypes = useMemo(() => ({ belt: BeltEdge }), []);
+  const edgeTypes = useMemo(() => ({ belt: BeltEdge, power: PowerEdge }), []);
 
   // Recentre le canvas après chaque auto-génération.
   useEffect(() => {
@@ -97,11 +113,11 @@ function Flow() {
         !r.alternate &&
         r.ingredients.some((ing) => ing.item === itemId),
     );
-    if (candidates.length === 1) updateNodeData(target.id, { recipeId: candidates[0].id });
+    if (candidates.length === 1) updateNodeData(target.id, { recipeId: candidates[0].id }, gameData);
   }, [storeOnConnect, updateNodeData, gameData]);
 
   // Calcule en un seul pass : styles d'arêtes + flux réels par node (pour les indicateurs dans MachineNode).
-  const { styledEdges, nodeFlowMap } = useMemo(() => {
+  const { styledEdges, nodeFlowMap, poweredByNode, powerConnections, powerNetworkByNode } = useMemo(() => {
     const domAttributes = (id: string) =>
       ({ 'data-edge-id': id }) as unknown as React.SVGAttributes<SVGGElement>;
 
@@ -109,14 +125,39 @@ function Flow() {
       return {
         styledEdges: edges.map((e) => ({ ...e, type: 'belt', domAttributes: domAttributes(e.id) })),
         nodeFlowMap: new Map<string, NodeActualFlow>(),
+        poweredByNode: new Map<string, boolean>(),
+        powerConnections: new Map<string, number>(),
+        powerNetworkByNode: new Map<string, PowerNetworkInfo>(),
       };
     }
 
     const summary = computeFactory(nodes, edges, gameData);
     const plans = new Map(summary.edges.map((p) => [p.edgeId, p]));
+    const { poweredByNode, networks } = computePowerNetworks(nodes, edges, gameData);
+
+    // Totaux du réseau (gen/demande) par node — pour la carte générateur.
+    const powerNetworkByNode = new Map<string, PowerNetworkInfo>();
+    for (const net of networks) {
+      for (const id of net.nodeIds) {
+        powerNetworkByNode.set(id, { totalGenMW: net.totalGenMW, totalDemandMW: net.totalDemandMW });
+      }
+    }
+
+    // Nombre de câbles énergie connectés par node (badge "x/4" du poteau électrique).
+    const powerConnections = new Map<string, number>();
+    for (const e of edges) {
+      if (!isPowerSourceHandle(e.sourceHandle) || !isPowerTargetHandle(e.targetHandle)) continue;
+      powerConnections.set(e.source, (powerConnections.get(e.source) ?? 0) + 1);
+      powerConnections.set(e.target, (powerConnections.get(e.target) ?? 0) + 1);
+    }
 
     // Styles d'arêtes (logique existante).
     const styledEdges = edges.map((e) => {
+      // Câble énergie : type d'arête dédié, coloré selon l'état du réseau (déficitaire = rouge).
+      if (isPowerSourceHandle(e.sourceHandle) && isPowerTargetHandle(e.targetHandle)) {
+        const powered = poweredByNode.get(e.source) ?? poweredByNode.get(e.target) ?? true;
+        return { ...e, type: 'power', domAttributes: domAttributes(e.id), data: { powered } };
+      }
       const plan = plans.get(e.id);
       if (!plan || plan.itemId == null) {
         return { ...e, type: 'belt', domAttributes: domAttributes(e.id) };
@@ -151,7 +192,7 @@ function Flow() {
       src.outputs.set(itemId, (src.outputs.get(itemId) ?? 0) + ratePerMin);
     }
 
-    return { styledEdges, nodeFlowMap };
+    return { styledEdges, nodeFlowMap, poweredByNode, powerConnections, powerNetworkByNode };
   }, [nodes, edges, gameData]);
 
   const onDragOver = useCallback((e: React.DragEvent) => {
@@ -185,6 +226,52 @@ function Flow() {
     [selectNode],
   );
 
+  // Drag-snap : à la fin d'un déplacement d'extracteur, on l'aimante au pin LIBRE le plus proche
+  // (ou on le détache s'il a quitté son pin). Le centre estimé du node (position + demi-taille)
+  // est comparé aux pins en coordonnées flow.
+  const SNAP_RADIUS = 130;
+  const onNodeDragStop = useCallback(
+    (_e: MouseEvent | TouchEvent, node: MachineNodeType) => {
+      if (!gameData) return;
+      const data = node.data;
+      const building = gameData.buildings.find((b) => b.id === data.buildingId);
+      if (!building || building.category !== 'extraction') return;
+
+      const cx = node.position.x + 110;
+      const cy = node.position.y + 40;
+      const all = useGraphStore.getState().nodes;
+      const isFree = (depId: string, pinIdx: number) =>
+        !all.some((n) => n.id !== node.id && n.data.depositId === depId && n.data.pinIndex === pinIdx);
+
+      let best: { depId: string; pinIdx: number; x: number; y: number; dist: number } | null = null;
+      for (const dep of deposits) {
+        for (let i = 0; i < dep.pins.length; i++) {
+          if (!isFree(dep.id, i)) continue;
+          const pin = dep.pins[i];
+          const dist = Math.hypot(pin.x - cx, pin.y - cy);
+          if (dist <= SNAP_RADIUS && (!best || dist < best.dist)) {
+            best = { depId: dep.id, pinIdx: i, x: pin.x, y: pin.y, dist };
+          }
+        }
+      }
+
+      if (best) {
+        const dep = deposits.find((d) => d.id === best!.depId)!;
+        snapMinerToPin(node.id, {
+          depositId: best.depId,
+          pinIndex: best.pinIdx,
+          resourceId: dep.resourceId,
+          purity: dep.purity,
+          x: best.x,
+          y: best.y,
+        });
+      } else if (data.depositId != null) {
+        unbindMiner(node.id);
+      }
+    },
+    [gameData, deposits, snapMinerToPin, unbindMiner],
+  );
+
   const isValidConnection = useCallback<IsValidConnection>(
     (c) => {
       const state = useGraphStore.getState();
@@ -193,8 +280,21 @@ function Flow() {
     [gameData],
   );
 
+  const rawItemIds = useMemo(
+    () => (gameData ? gameData.items.filter((i) => i.raw).map((i) => i.id) : []),
+    [gameData],
+  );
+  const onRegenerate = useCallback(() => {
+    if (window.confirm('Régénérer la carte ? Les mineurs posés seront détachés de leur gisement.')) {
+      regenerate(rawItemIds);
+    }
+  }, [regenerate, rawItemIds]);
+
   return (
     <NodeFlowContext.Provider value={nodeFlowMap}>
+    <PowerContext.Provider value={poweredByNode}>
+    <PowerConnectionsContext.Provider value={powerConnections}>
+    <PowerNetworkContext.Provider value={powerNetworkByNode}>
     <div className="h-full w-full" onDragOver={onDragOver} onDrop={onDrop}>
       <ReactFlow
         nodes={nodes}
@@ -204,6 +304,7 @@ function Flow() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onNodeDragStop={onNodeDragStop}
         onSelectionChange={onSelectionChange}
         isValidConnection={isValidConnection}
         connectionLineType={ConnectionLineType.SmoothStep}
@@ -219,6 +320,19 @@ function Flow() {
         fitView
         proOptions={{ hideAttribution: true }}
       >
+        <ViewportPortal>
+          <ResourceLayer />
+        </ViewportPortal>
+        <Panel position="top-right">
+          <button
+            type="button"
+            onClick={onRegenerate}
+            title="Génère une nouvelle disposition de gisements (détache les mineurs)"
+            className="rounded-md border border-zinc-700 bg-zinc-900/90 px-2.5 py-1.5 text-xs font-medium text-zinc-200 shadow-md hover:border-amber-500 hover:text-amber-300 transition-colors"
+          >
+            🗺 Nouvelle carte
+          </button>
+        </Panel>
         <Background />
         <Controls />
         <MiniMap
@@ -230,14 +344,13 @@ function Flow() {
         />
       </ReactFlow>
     </div>
+    </PowerNetworkContext.Provider>
+    </PowerConnectionsContext.Provider>
+    </PowerContext.Provider>
     </NodeFlowContext.Provider>
   );
 }
 
 export function GraphCanvas() {
-  return (
-    <ReactFlowProvider>
-      <Flow />
-    </ReactFlowProvider>
-  );
+  return <Flow />;
 }

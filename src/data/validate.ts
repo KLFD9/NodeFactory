@@ -5,6 +5,7 @@ const BUILDING_CATEGORIES: readonly BuildingCategory[] = [
   'smelting',
   'manufacturing',
   'logistics',
+  'power',
 ];
 
 export class GameDataError extends Error {

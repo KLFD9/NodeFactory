@@ -2,6 +2,7 @@ import type { Edge } from '@xyflow/react';
 import type { Belt, GameData } from '@/data/types';
 import type { MachineNode } from '@/store/useGraphStore';
 import { computeNodeInfo } from './nodeInfo';
+import { isPowerSourceHandle, isPowerTargetHandle } from './power';
 
 /** Plan de convoyage pour un débit donné. */
 export interface BeltPlan {
@@ -76,6 +77,11 @@ export interface FactorySummary {
    * compte même si les lingots sont consommés en aval). Trié par débit décroissant.
    */
   production: ItemRate[];
+  /**
+   * Consommation BRUTE par item (toutes machines confondues), miroir de `production`.
+   * Permet d'afficher « X produit / Y consommé » par ressource (Diagnostics réseau).
+   */
+  consumption: ItemRate[];
   edges: EdgePlan[];
 }
 
@@ -148,7 +154,11 @@ export function computeFactory(
 
   const edgeFlow = new Map<string, { itemId: string | null; rate: number }>();
   const resolving = new Set<string>();
+  const isPowerEdge = (e: Edge) => isPowerSourceHandle(e.sourceHandle) && isPowerTargetHandle(e.targetHandle);
+
   const resolveEdge = (e: Edge): { itemId: string | null; rate: number } => {
+    // Câbles énergie : réseau séparé, ne portent aucun flux d'item.
+    if (isPowerEdge(e)) return { itemId: null, rate: 0 };
     const cached = edgeFlow.get(e.id);
     if (cached) return cached;
     if (resolving.has(e.id)) return { itemId: null, rate: 0 }; // garde anti-cycle
@@ -199,6 +209,10 @@ export function computeFactory(
   for (const [id, rate] of production) {
     if (rate > 0) grossProduction.push({ itemId: id, itemName: itemName(id), ratePerMin: round(rate) });
   }
+  const grossConsumption: ItemRate[] = [];
+  for (const [id, rate] of consumption) {
+    if (rate > 0) grossConsumption.push({ itemId: id, itemName: itemName(id), ratePerMin: round(rate) });
+  }
   return {
     totalMachines,
     totalPowerMW: round(totalPowerMW),
@@ -206,6 +220,7 @@ export function computeFactory(
     rawInputs: rawInputs.sort(byRate),
     surplus: surplus.sort(byRate),
     production: grossProduction.sort(byRate),
+    consumption: grossConsumption.sort(byRate),
     edges: edgePlans,
   };
 }

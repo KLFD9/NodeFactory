@@ -19,5 +19,6 @@
   { "id": "circuit-board", "name": "Circuit Board", "category": "part", "raw": false },
   { "id": "motor", "name": "Motor", "category": "part", "raw": false },
   { "id": "heavy-frame", "name": "Heavy Frame", "category": "part", "raw": false },
-  { "id": "computer", "name": "Computer", "category": "part", "raw": false }
+  { "id": "computer", "name": "Computer", "category": "part", "raw": false },
+  { "id": "electricity", "name": "Electricity", "category": "energy", "raw": false }
 ]

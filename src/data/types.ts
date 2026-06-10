@@ -10,8 +10,13 @@
 /** Identifiant stable d'un item, bâtiment, etc. (kebab-case). */
 export type Id = string;
 
-/** Catégorie logique d'un item — guide l'UI et le solveur (raw = importable brut). */
-export type ItemCategory = 'raw' | 'ingot' | 'part' | 'fluid';
+/**
+ * Catégorie logique d'un item — guide l'UI et le solveur (raw = importable brut).
+ * 'energy' : sortie virtuelle non consommable (ex. "Electricity"), utilisée comme
+ * `products` factice pour les recettes de générateurs (satisfait le validateur
+ * « toute recette a un produit » sans introduire un item physique transportable).
+ */
+export type ItemCategory = 'raw' | 'ingot' | 'part' | 'fluid' | 'energy';
 
 export interface GameItem {
   id: Id;
@@ -21,8 +26,11 @@ export interface GameItem {
   raw: boolean;
 }
 
-/** Catégorie d'un bâtiment — structure la palette de l'éditeur de nœuds. */
-export type BuildingCategory = 'extraction' | 'smelting' | 'manufacturing' | 'logistics';
+/**
+ * Catégorie d'un bâtiment — structure la palette de l'éditeur de nœuds.
+ * 'power' : générateur électrique (Coal Generator, etc.).
+ */
+export type BuildingCategory = 'extraction' | 'smelting' | 'manufacturing' | 'logistics' | 'power';
 
 /** Encombrement au sol (en mètres), tel qu'affiché sur les fiches du jeu. */
 export interface BuildingDimensions {
@@ -35,7 +43,12 @@ export interface Building {
   id: Id;
   name: string;
   category: BuildingCategory;
-  /** Consommation électrique nominale, en MW. */
+  /**
+   * Puissance électrique nominale, en MW.
+   * CONVENTION : pour `category === 'power'`, `powerMW` représente la
+   * GÉNÉRATION (MW produits par le générateur). Pour toute autre catégorie,
+   * `powerMW` représente la CONSOMMATION (MW tirés du réseau).
+   */
   powerMW: number;
   /** Nombre de ports d'entrée / de sortie (façade logistique). */
   inputs?: number;

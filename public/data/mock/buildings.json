@@ -79,6 +79,15 @@
     "dimensions": { "width": 10, "length": 20, "height": 31 }
   },
   {
+    "id": "coal-generator",
+    "name": "Coal Generator",
+    "category": "power",
+    "powerMW": 15,
+    "inputs": 1,
+    "outputs": 0,
+    "dimensions": { "width": 18, "length": 21, "height": 24 }
+  },
+  {
     "id": "splitter",
     "name": "Conveyor Splitter",
     "category": "logistics",
@@ -93,5 +102,13 @@
     "powerMW": 0,
     "inputs": 3,
     "outputs": 1
+  },
+  {
+    "id": "power-pole",
+    "name": "Power Pole",
+    "category": "power",
+    "powerMW": 0,
+    "inputs": 0,
+    "outputs": 0
   }
 ]

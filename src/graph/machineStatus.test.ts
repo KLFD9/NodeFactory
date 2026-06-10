@@ -51,4 +51,24 @@ describe('computeMachineStatus', () => {
     expect(s.efficiency).toBe(1);
     expect(s.missing).toHaveLength(0);
   });
+
+  it('machine non alimentée électriquement → unpowered (prioritaire sur starved/nominal)', () => {
+    // Pleinement alimentée en matières, mais le réseau électrique est déficitaire.
+    const data: MachineNodeData = { buildingId: 'constructor', recipeId: 'iron-plate' };
+    const s = computeMachineStatus(data, flow({ 'iron-ingot': 30 }), game, false);
+    expect(s.state).toBe('unpowered');
+    expect(s.efficiency).toBe(0);
+  });
+
+  it('extracteur non alimenté → unpowered (pas nominal)', () => {
+    const data: MachineNodeData = { buildingId: 'miner-mk1', resourceId: 'iron-ore', purity: 'normal' };
+    const s = computeMachineStatus(data, undefined, game, false);
+    expect(s.state).toBe('unpowered');
+  });
+
+  it('générateur (powerMW = génération, pas demande) → jamais unpowered', () => {
+    const data: MachineNodeData = { buildingId: 'coal-generator', recipeId: 'coal-generator-power' };
+    const s = computeMachineStatus(data, flow({ coal: 30 }), game, false);
+    expect(s.state).not.toBe('unpowered');
+  });
 });

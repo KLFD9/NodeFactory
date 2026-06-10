@@ -9,3 +9,4 @@
 
 export * from './balance';
 export * from './progression';
+export * from './resourceMap';

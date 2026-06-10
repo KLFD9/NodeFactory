@@ -13,6 +13,7 @@ import {
   isRecipeUnlocked,
   milestoneProgress,
   nextMilestone,
+  trySpendAP,
   type ProgressionState,
 } from './progression';
 
@@ -34,7 +35,7 @@ function freshState(overrides: Partial<ProgressionState> = {}): ProgressionState
 describe('initialProgression', () => {
   it('démarre vide, horloge calée sur nowMs', () => {
     const s = initialProgression(NOW);
-    expect(s.automationPoints).toBe(0);
+    expect(s.automationPoints).toBe(50);
     expect(s.cumulativeProduced).toEqual({});
     expect(s.reachedMilestones).toEqual([]);
     expect(s.unlockedBuildings).toEqual([]);
@@ -59,7 +60,7 @@ describe('applyProductionTick — accumulation', () => {
     expect(state.cumulativeProduced['iron-ingot']).toBeCloseTo(60, 6);
     // AP = 30 × 1.0 × (1/3) × 2 min = 20 AP.
     expect(apGained).toBeCloseTo(30 * AP_RATE_PER_ITEM_PER_MIN * 2, 6);
-    expect(state.automationPoints).toBeCloseTo(apGained, 6);
+    expect(state.automationPoints).toBeCloseTo(50 + apGained, 6);
     expect(state.lastSeenMs).toBe(NOW + 120_000);
   });
 
@@ -163,7 +164,7 @@ describe('applyOfflineGains', () => {
 
     expect(apGained).toBeCloseTo(10 * LONG_CLOCK_CAP_MIN, 6); // 10 × 240 = 2400
     expect(minutesCredited).toBeCloseTo(LONG_CLOCK_CAP_MIN, 6);
-    expect(state.automationPoints).toBeCloseTo(2400, 6);
+    expect(state.automationPoints).toBeCloseTo(50 + 2400, 6);
     expect(state.lastSeenMs).toBe(fiveHoursLater);
   });
 
@@ -231,5 +232,28 @@ describe('helpers UI', () => {
 
     const none = freshState();
     expect(milestoneProgress(none, m1)).toBe(0);
+  });
+});
+
+describe('trySpendAP', () => {
+  it('déduit le coût si le solde est suffisant', () => {
+    const s = freshState({ automationPoints: 50 });
+    const { state, spent } = trySpendAP(s, 10);
+    expect(spent).toBe(true);
+    expect(state.automationPoints).toBe(40);
+  });
+
+  it('refuse et laisse l\'état inchangé si le solde est insuffisant', () => {
+    const s = freshState({ automationPoints: 5 });
+    const { state, spent } = trySpendAP(s, 10);
+    expect(spent).toBe(false);
+    expect(state.automationPoints).toBe(5);
+  });
+
+  it('coût nul ou négatif : toujours accepté, état inchangé', () => {
+    const s = freshState({ automationPoints: 5 });
+    const { state, spent } = trySpendAP(s, 0);
+    expect(spent).toBe(true);
+    expect(state.automationPoints).toBe(5);
   });
 });

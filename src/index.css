@@ -70,6 +70,11 @@ body,
   to { stroke-dashoffset: -15; }
 }
 
+/* ── Texture de convoyeur — rouleaux qui défilent sous le flux d'items ── */
+@keyframes belt-ridge-flow {
+  to { stroke-dashoffset: -8; }
+}
+
 /* Renforcement au survol de l'arête animée. */
 .react-flow__edge:hover .nf-belt-flow {
   opacity: 1 !important;
@@ -114,3 +119,244 @@ body,
   background-size: 15px 100%;
   animation: nf-bilan-ticker var(--nf-tick-speed, 1s) linear infinite;
 }
+
+/* ── Styles Game UI additionnels (Satisfactory/Factorio feel) ────────────────── */
+
+.vertical-text {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+/* En-tête HUD style industriel */
+.nf-hud-header {
+  position: relative;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  letter-spacing: 0.05em;
+  background: linear-gradient(90deg, rgba(249, 115, 22, 0.1) 0%, transparent 100%);
+  border-left: 3px solid #f97316;
+}
+
+/* Grille de télémétrie style oscilloscope pour les sparklines */
+.nf-telemetry-grid {
+  background-image: 
+    linear-gradient(rgba(39, 39, 42, 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(39, 39, 42, 0.3) 1px, transparent 1px);
+  background-size: 6px 6px;
+  background-color: #09090b;
+}
+
+/* Barre de progression segmentée rétro-lumineuse */
+.nf-segmented-bar {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--bar-color, #10b981) 0px,
+    var(--bar-color, #10b981) 4px,
+    transparent 4px,
+    transparent 6px
+  );
+  background-size: 6px 100%;
+}
+
+/* Animation de flux télémétrique SVG */
+@keyframes telemetry-flow {
+  to {
+    stroke-dashoffset: -6;
+  }
+}
+.nf-telemetry-flow {
+  stroke-dasharray: 4 2;
+  animation: telemetry-flow 0.8s linear infinite;
+}
+
+/* Animation d'oscilloscope pour la tension du réseau électrique */
+@keyframes nf-wave-slide {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-24px, 0, 0); }
+}
+.nf-wave-animate {
+  animation: nf-wave-slide var(--wave-speed, 1.5s) linear infinite;
+}
+
+/* ── Modern Node Designs (Industrial High-Tech) ────────────────────────── */
+
+/* Glassmorphism base with high-contrast border and rich inner shadow */
+.nf-node-glass {
+  background: rgba(18, 18, 24, 0.82) !important;
+  backdrop-filter: blur(12px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(140%) !important;
+  border: 1px solid rgba(63, 63, 70, 0.4) !important;
+  box-shadow: 
+    0 10px 30px -10px rgba(0, 0, 0, 0.7),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Glowing selection outline based on category accent color */
+.nf-node-selected-glow {
+  outline: none !important;
+  border-color: var(--category-color, #fb923c) !important;
+  box-shadow: 
+    0 0 0 1px var(--category-color, #fb923c),
+    0 0 16px 2px var(--category-glow, rgba(249, 115, 22, 0.25)),
+    0 10px 30px -10px rgba(0, 0, 0, 0.7),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+/* High-tech header with gradient background */
+.nf-node-header-glow {
+  background: linear-gradient(90deg, var(--category-glow-soft, rgba(249, 115, 22, 0.05)) 0%, transparent 100%);
+  border-bottom: 1px solid rgba(63, 63, 70, 0.3);
+}
+
+/* Activity diode with strong radial glow */
+.nf-diode-glow {
+  box-shadow: 0 0 8px var(--state-color, #10b981), 0 0 2px var(--state-color, #10b981);
+}
+
+/* Pulsing state ring animation */
+@keyframes nf-activity-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+.nf-activity-ring {
+  animation: nf-activity-ring 1.5s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+/* Energy core rotation for power poles */
+@keyframes nf-energy-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.nf-energy-ring-rotate {
+  animation: nf-energy-rotate 10s linear infinite;
+}
+
+/* Glowing cycle progress bar */
+.nf-cycle-bar-glow {
+  background: linear-gradient(90deg, transparent, var(--bar-color, #f97316) 80%, #ffffff 100%) !important;
+  box-shadow: 0 0 6px 1px var(--bar-color-glow, rgba(249, 115, 22, 0.3));
+}
+
+/* Logistics hexagonal shape container */
+.nf-logistics-hex {
+  clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+  background: rgba(18, 18, 24, 0.85) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(113, 113, 122, 0.4) !important;
+}
+
+/* Connection pin adjustments */
+.react-flow__handle.nf-handle-style {
+  width: 10px !important;
+  height: 10px !important;
+  border: 2px solid #09090b !important;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.react-flow__handle.nf-handle-style:hover {
+  width: 14px !important;
+  height: 14px !important;
+  box-shadow: 0 0 8px var(--handle-color-glow, rgba(249, 115, 22, 0.6)) !important;
+}
+
+/* Breathing pulse animation for HUD targeting brackets */
+@keyframes nf-hud-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.025);
+  }
+}
+.nf-hud-bracket {
+  animation: nf-hud-pulse 2s ease-in-out infinite;
+}
+
+/* ── Game Design Micro-Animations & Custom Patterns ─────────────────── */
+
+/* Heavy hazard diagonal warning stripes */
+.nf-hazard-stripes {
+  background: repeating-linear-gradient(
+    -45deg,
+    #f59e0b 0px,
+    #f59e0b 8px,
+    #18181b 8px,
+    #18181b 16px
+  );
+}
+
+/* Thermal fusion furnace glow for Smelters */
+@keyframes nf-thermal-pulse {
+  0%, 100% {
+    background-color: rgba(249, 115, 22, 0.03);
+    box-shadow: inset 0 0 12px rgba(249, 115, 22, 0.05);
+  }
+  50% {
+    background-color: rgba(249, 115, 22, 0.12);
+    box-shadow: inset 0 0 25px rgba(249, 115, 22, 0.25);
+  }
+}
+.nf-thermal-pulse {
+  animation: nf-thermal-pulse 2.5s ease-in-out infinite;
+}
+
+/* Laser scan animation overlay for Manufacturers */
+@keyframes nf-laser-scan {
+  0% { transform: translateY(-100%); opacity: 0; }
+  15% { opacity: 0.6; }
+  85% { opacity: 0.6; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+.nf-laser-scanner {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #38bdf8, transparent);
+  box-shadow: 0 0 8px #38bdf8;
+  animation: nf-laser-scan 3s ease-in-out infinite;
+}
+
+/* Miner vibration shake animation */
+@keyframes nf-drill-vibe {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(-0.5px, 0.5px) rotate(-0.5deg); }
+  50% { transform: translate(-0.5px, -0.5px) rotate(0.5deg); }
+  75% { transform: translate(0.5px, 0.5px) rotate(0deg); }
+}
+.nf-vibe-active {
+  animation: nf-drill-vibe 0.18s linear infinite;
+}
+
+/* Reverse rotation for gyro energy ring */
+@keyframes nf-gyro-reverse {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+.nf-energy-ring-reverse {
+  animation: nf-gyro-reverse 7s linear infinite;
+}
+
+/* Slow spin for gears/manufacturing */
+@keyframes nf-spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.nf-spin-active {
+  animation: nf-spin-slow 6s linear infinite;
+}
+
+/* Glowing amber embers grid background for smelters */
+.nf-furnace-grid {
+  background-image: radial-gradient(rgba(249, 115, 22, 0.15) 1.2px, transparent 1.2px);
+  background-size: 8px 8px;
+}
+
+
+
+
+
+

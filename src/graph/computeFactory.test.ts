@@ -62,6 +62,24 @@ describe('computeFactory (bilan matière + énergie)', () => {
     ]);
   });
 
+  it('un câble énergie (power-out → power-in) ne porte aucun flux d’item', () => {
+    const nodes = [
+      machine('miner', { buildingId: 'miner-mk1', resourceId: 'iron-ore', purity: 'normal' }),
+      machine('smelter', { buildingId: 'smelter', recipeId: 'iron-ingot' }),
+    ];
+    const edges: Edge[] = [
+      { id: 'belt', source: 'miner', target: 'smelter', sourceHandle: 'out-iron-ore', targetHandle: 'in-iron-ore' },
+      { id: 'power', source: 'smelter', target: 'miner', sourceHandle: 'power-out', targetHandle: 'power-in' },
+    ];
+    const summary = computeFactory(nodes, edges, game);
+    const beltPlan = summary.edges.find((p) => p.edgeId === 'belt')!;
+    const powerPlan = summary.edges.find((p) => p.edgeId === 'power')!;
+    expect(beltPlan.itemId).toBe('iron-ore');
+    expect(beltPlan.ratePerMin).toBe(60);
+    expect(powerPlan.itemId).toBeNull();
+    expect(powerPlan.ratePerMin).toBe(0);
+  });
+
   it('plan d’arête : débit du node source réparti, tier de convoyeur calculé', () => {
     const nodes = [
       machine('s', { buildingId: 'smelter', recipeId: 'iron-ingot', count: 3 }), // 90/min

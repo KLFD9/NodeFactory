@@ -4,6 +4,7 @@ import {
   applyOfflineGains,
   applyProductionTick,
   initialProgression,
+  trySpendAP,
   type ProgressionState,
   type TickInput,
 } from '@/game/progression';
@@ -30,6 +31,8 @@ interface ProgressionStore extends ProgressionState {
   applyOffline: (nowMs?: number) => number;
   /** Vide la file des déblocages récents (après affichage de la notification). */
   dismissUnlocks: () => void;
+  /** Tente de dépenser `cost` AP (coût de pose). Renvoie true si débité, false si solde insuffisant. */
+  spendAP: (cost: number) => boolean;
   /** Réinitialise toute la progression (debug / futur prestige). */
   reset: () => void;
 }
@@ -60,6 +63,12 @@ export const useProgressionStore = create<ProgressionStore>()(
 
       dismissUnlocks: () => set({ recentUnlocks: [] }),
 
+      spendAP: (cost) => {
+        const { state: next, spent } = trySpendAP(get(), cost);
+        if (spent) set(next);
+        return spent;
+      },
+
       reset: () => set({ ...initialProgression(), recentUnlocks: [] }),
     }),
     {
@@ -69,6 +78,7 @@ export const useProgressionStore = create<ProgressionStore>()(
       partialize: (s): ProgressionState => ({
         automationPoints: s.automationPoints,
         cumulativeProduced: s.cumulativeProduced,
+        nodeCumulativeProduced: s.nodeCumulativeProduced,
         reachedMilestones: s.reachedMilestones,
         unlockedBuildings: s.unlockedBuildings,
         unlockedRecipes: s.unlockedRecipes,

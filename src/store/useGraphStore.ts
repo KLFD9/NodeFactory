@@ -10,7 +10,11 @@ import {
   type NodeChange,
   type XYPosition,
 } from '@xyflow/react';
-import type { Purity } from '@/data/types';
+import type { GameData, Purity } from '@/data/types';
+import { reconcileEdgesForNode } from '@/graph/connection';
+import { BUILDING_COSTS } from '@/game/balance';
+import { useProgressionStore } from '@/store/useProgressionStore';
+import { useFactoryStore } from '@/store/useFactoryStore';
 
 /**
  * Données portées par un node de l'éditeur. Un node = une instance de bâtiment posée
@@ -23,17 +27,40 @@ export interface MachineNodeData extends Record<string, unknown> {
   /** Extracteurs : ressource extraite + pureté du nœud. */
   resourceId?: string;
   purity?: Purity;
+  /** Extracteurs liés à un gisement : gisement + pin occupé (ressource/pureté en sont dérivés). */
+  depositId?: string;
+  pinIndex?: number;
   /** Nombre de machines représentées par ce node (×1 par défaut). */
   count?: number;
   /** Hubs logistiques (splitter/merger) : nombre de ports d'entrée/sortie dynamiques. */
   portsIn?: number;
   portsOut?: number;
+  /** Rotation du bâtiment en degrés (0, 90, 180, 270). */
+  rotation?: number;
 }
 
 export type MachineNode = Node<MachineNodeData, 'machine'>;
 
 let nodeCounter = 0;
 const nextId = () => `node-${++nodeCounter}`;
+
+/**
+ * Données initiales d'un node fraîchement posé.
+ *  - extracteur → pureté Normale par défaut (la ressource viendra du gisement).
+ *  - bâtiment MONO-RECETTE (ex. Coal Generator) → recette auto-assignée : inutile de la choisir
+ *    à la main, et ça évite que le choix ultérieur ne casse une connexion déjà posée (le port
+ *    générique `in-0` devient directement `in-<item>`).
+ */
+function initialNodeData(buildingId: string, category: string): MachineNodeData {
+  const data: MachineNodeData = { buildingId };
+  if (category === 'extraction') data.purity = 'normal';
+  const game = useFactoryStore.getState().gameData;
+  if (game) {
+    const std = game.recipes.filter((r) => r.producedIn === buildingId && !r.alternate);
+    if (std.length === 1) data.recipeId = std[0].id;
+  }
+  return data;
+}
 
 interface GraphState {
   nodes: MachineNode[];
@@ -50,8 +77,12 @@ interface GraphState {
   addBuildingNode: (buildingId: string, position: XYPosition, category: string) => void;
   /** Pose un nouveau node de bâtiment et divise éventuellement une arête existante. */
   dropBuildingNode: (buildingId: string, position: XYPosition, category: string, splitEdgeId?: string | null) => void;
-  /** Met à jour la config d'un node (recette, ressource, pureté…). */
-  updateNodeData: (id: string, patch: Partial<MachineNodeData>) => void;
+  /**
+   * Met à jour la config d'un node (recette, ressource, pureté…).
+   * Si `gameData` est fourni, les arêtes connectées sont remappées/supprimées en cas de
+   * changement des ports `in-<item>`/`out-<item>` (voir `reconcileEdgesForNode`).
+   */
+  updateNodeData: (id: string, patch: Partial<MachineNodeData>, gameData?: GameData) => void;
   /** Supprime un node et ses arêtes connectées. */
   deleteNode: (id: string) => void;
   selectNode: (id: string | null) => void;
@@ -66,7 +97,37 @@ interface GraphState {
   paste: () => void;
   /** Copie puis colle immédiatement la sélection (duplication). */
   duplicateSelection: () => void;
+
+  /** Dernière pose refusée faute d'AP suffisants (transitoire, pour notification UI). */
+  placementDenied: { buildingId: string; cost: number; available: number } | null;
+  /** Efface la notification de pose refusée. */
+  dismissPlacementDenied: () => void;
+
+  /** Lie un extracteur existant à un pin de gisement (drag-snap) : le pose dessus et dénormalise
+   *  ressource + pureté sur le node (`computeNodeInfo` reste inchangé). */
+  snapMinerToPin: (nodeId: string, binding: MinerBinding) => void;
+  /** Détache un extracteur de son gisement (redevient libre/inactif). */
+  unbindMiner: (nodeId: string) => void;
+  /** Crée un nouvel extracteur `miner-mk1` déjà lié à un pin (clic-sur-pin). Respecte le coût AP. */
+  placeMinerOnPin: (binding: MinerBinding) => void;
+  /** Détache tous les extracteurs (utilisé quand la carte est régénérée). */
+  unbindAllMiners: () => void;
 }
+
+/** Données de liaison d'un mineur à un pin (passées en primitifs pour découpler du module monde). */
+export interface MinerBinding {
+  depositId: string;
+  pinIndex: number;
+  resourceId: string;
+  purity: Purity;
+  /** Coordonnées flow du pin (centre visé pour la pose). */
+  x: number;
+  y: number;
+}
+
+/** Demi-dimensions approximatives d'une carte mineur, pour centrer la pose sur le pin. */
+const MINER_HALF_W = 110;
+const MINER_HALF_H = 40;
 
 export const useGraphStore = create<GraphState>((set, get) => ({
   nodes: [],
@@ -82,27 +143,41 @@ export const useGraphStore = create<GraphState>((set, get) => ({
 
   onConnect: (connection) => set((state) => ({ edges: addEdge(connection, state.edges) })),
 
+  placementDenied: null,
+  dismissPlacementDenied: () => set({ placementDenied: null }),
+
   addBuildingNode: (buildingId, position, category) =>
     set((state) => {
+      const cost = BUILDING_COSTS[buildingId] ?? 0;
+      if (cost > 0 && !useProgressionStore.getState().spendAP(cost)) {
+        return {
+          placementDenied: { buildingId, cost, available: useProgressionStore.getState().automationPoints },
+        };
+      }
       const id = nextId();
       const node: MachineNode = {
         id,
         type: 'machine',
         position,
-        // Pré-règle la pureté Normale pour un extracteur ; les machines choisiront leur recette.
-        data: { buildingId, ...(category === 'extraction' ? { purity: 'normal' as Purity } : {}) },
+        data: initialNodeData(buildingId, category),
       };
       return { nodes: [...state.nodes, node], selectedNodeId: id };
     }),
 
   dropBuildingNode: (buildingId, position, category, splitEdgeId) =>
     set((state) => {
+      const cost = BUILDING_COSTS[buildingId] ?? 0;
+      if (cost > 0 && !useProgressionStore.getState().spendAP(cost)) {
+        return {
+          placementDenied: { buildingId, cost, available: useProgressionStore.getState().automationPoints },
+        };
+      }
       const id = nextId();
       const node: MachineNode = {
         id,
         type: 'machine',
         position,
-        data: { buildingId, ...(category === 'extraction' ? { purity: 'normal' as Purity } : {}) },
+        data: initialNodeData(buildingId, category),
       };
 
       let newEdges = [...state.edges];
@@ -143,10 +218,12 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       };
     }),
 
-  updateNodeData: (id, patch) =>
-    set((state) => ({
-      nodes: state.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...patch } } : n)),
-    })),
+  updateNodeData: (id, patch, gameData) =>
+    set((state) => {
+      const nodes = state.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...patch } } : n));
+      const edges = gameData ? reconcileEdgesForNode(id, nodes, state.edges, gameData) : state.edges;
+      return { nodes, edges };
+    }),
 
   deleteNode: (id) =>
     set((state) => ({
@@ -155,7 +232,14 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
     })),
 
-  selectNode: (selectedNodeId) => set({ selectedNodeId }),
+  selectNode: (selectedNodeId) =>
+    set((state) => ({
+      selectedNodeId,
+      nodes: state.nodes.map((n) => ({
+        ...n,
+        selected: n.id === selectedNodeId,
+      })),
+    })),
 
   setGraph: (nodes, edges) =>
     set((state) => ({ nodes, edges, selectedNodeId: null, generation: state.generation + 1 })),
@@ -205,4 +289,84 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     get().copySelection();
     get().paste();
   },
+
+  snapMinerToPin: (nodeId, b) =>
+    set((state) => ({
+      nodes: state.nodes.map((n) =>
+        n.id === nodeId
+          ? {
+              ...n,
+              position: { x: b.x - MINER_HALF_W, y: b.y - MINER_HALF_H },
+              data: {
+                ...n.data,
+                depositId: b.depositId,
+                pinIndex: b.pinIndex,
+                resourceId: b.resourceId,
+                purity: b.purity,
+              },
+            }
+          : n,
+      ),
+    })),
+
+  unbindMiner: (nodeId) =>
+    set((state) => ({
+      nodes: state.nodes.map((n) =>
+        n.id === nodeId
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                depositId: undefined,
+                pinIndex: undefined,
+                resourceId: undefined,
+                purity: undefined,
+              },
+            }
+          : n,
+      ),
+    })),
+
+  placeMinerOnPin: (b) =>
+    set((state) => {
+      const buildingId = 'miner-mk1';
+      const cost = BUILDING_COSTS[buildingId] ?? 0;
+      if (cost > 0 && !useProgressionStore.getState().spendAP(cost)) {
+        return {
+          placementDenied: { buildingId, cost, available: useProgressionStore.getState().automationPoints },
+        };
+      }
+      const id = nextId();
+      const node: MachineNode = {
+        id,
+        type: 'machine',
+        position: { x: b.x - MINER_HALF_W, y: b.y - MINER_HALF_H },
+        data: {
+          buildingId,
+          depositId: b.depositId,
+          pinIndex: b.pinIndex,
+          resourceId: b.resourceId,
+          purity: b.purity,
+        },
+      };
+      return { nodes: [...state.nodes, node], selectedNodeId: id };
+    }),
+
+  unbindAllMiners: () =>
+    set((state) => ({
+      nodes: state.nodes.map((n) =>
+        n.data.depositId != null
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                depositId: undefined,
+                pinIndex: undefined,
+                resourceId: undefined,
+                purity: undefined,
+              },
+            }
+          : n,
+      ),
+    })),
 }));

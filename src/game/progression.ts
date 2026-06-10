@@ -11,6 +11,7 @@
 
 import {
   MILESTONES,
+  STARTING_AP,
   computeApRate,
   computeOfflineGains,
   checkNewlyReachedMilestones,
@@ -27,6 +28,8 @@ export interface ProgressionState {
   automationPoints: number;
   /** Quantité cumulée produite par item (clé = itemId) — base des milestones. */
   cumulativeProduced: Record<string, number>;
+  /** Quantité cumulée produite par nœud et par item (nodeId -> itemId -> total). */
+  nodeCumulativeProduced: Record<string, Record<string, number>>;
   /** Ids des milestones déjà franchis (idempotence). */
   reachedMilestones: string[];
   /** Bâtiments débloqués par les milestones (filtre futur de la palette). */
@@ -44,8 +47,9 @@ export interface ProgressionState {
 /** État de départ : tout à zéro, horloge calée sur maintenant. */
 export function initialProgression(nowMs: number = Date.now()): ProgressionState {
   return {
-    automationPoints: 0,
+    automationPoints: STARTING_AP,
     cumulativeProduced: {},
+    nodeCumulativeProduced: {},
     reachedMilestones: [],
     unlockedBuildings: [],
     unlockedRecipes: [],
@@ -65,9 +69,17 @@ export interface ProductionRate {
   ratePerMin: number;
 }
 
+export interface NodeProductionRate {
+  nodeId: string;
+  itemId: string;
+  ratePerMin: number;
+}
+
 export interface TickInput {
   /** Production brute par item (summary.production) — accumulée pour les milestones. */
   grossProduction: ProductionRate[];
+  /** Production brute par machine ID et par item. */
+  nodeProductions?: NodeProductionRate[];
   /** Débit total des sorties finales (items/min) — base du taux d'AP. */
   totalOutputPerMin: number;
   /** Efficacité globale de l'usine [0, 1] — module le taux d'AP. */
@@ -107,17 +119,34 @@ function applyUnlock(state: ProgressionState, m: MilestoneDefinition): Progressi
  * ne se redéclenche jamais.
  */
 export function applyProductionTick(state: ProgressionState, input: TickInput): TickResult {
-  const { grossProduction, totalOutputPerMin, efficiency, dtMin, nowMs } = input;
+  const { grossProduction, nodeProductions, totalOutputPerMin, efficiency, dtMin, nowMs } = input;
 
   // dt non positif (horloge figée/recule) : on ne fait qu'actualiser lastSeen, sans gain.
   const safeDtMin = Math.max(0, dtMin);
 
   // 1. Accumulation de la production brute (pour les milestones).
   const cumulativeProduced = { ...state.cumulativeProduced };
+  const nodeCumulativeProduced: Record<string, Record<string, number>> = {};
+  if (state.nodeCumulativeProduced) {
+    for (const [nodeId, items] of Object.entries(state.nodeCumulativeProduced)) {
+      nodeCumulativeProduced[nodeId] = { ...items };
+    }
+  }
+
   if (safeDtMin > 0) {
     for (const { itemId, ratePerMin } of grossProduction) {
       if (ratePerMin > 0) {
         cumulativeProduced[itemId] = (cumulativeProduced[itemId] ?? 0) + ratePerMin * safeDtMin;
+      }
+    }
+    if (nodeProductions) {
+      for (const { nodeId, itemId, ratePerMin } of nodeProductions) {
+        if (ratePerMin > 0) {
+          if (!nodeCumulativeProduced[nodeId]) {
+            nodeCumulativeProduced[nodeId] = {};
+          }
+          nodeCumulativeProduced[nodeId][itemId] = (nodeCumulativeProduced[nodeId][itemId] ?? 0) + ratePerMin * safeDtMin;
+        }
       }
     }
   }
@@ -130,6 +159,7 @@ export function applyProductionTick(state: ProgressionState, input: TickInput): 
   let next: ProgressionState = {
     ...state,
     cumulativeProduced,
+    nodeCumulativeProduced,
     automationPoints: state.automationPoints + apGained,
     lastSeenMs: nowMs,
     lastApRatePerMin: apRatePerMin,
@@ -151,6 +181,26 @@ export function applyProductionTick(state: ProgressionState, input: TickInput): 
   }
 
   return { state: next, newlyReached, apGained };
+}
+
+// ---------------------------------------------------------------------------
+// Dépense d'AP (coût de pose des bâtiments)
+// ---------------------------------------------------------------------------
+
+export interface SpendResult {
+  state: ProgressionState;
+  /** true si la dépense a été effectuée (solde suffisant), false sinon (état inchangé). */
+  spent: boolean;
+}
+
+/**
+ * Tente de dépenser `cost` AP. Refuse (état inchangé, `spent: false`) si le solde est
+ * insuffisant — jamais de solde négatif.
+ */
+export function trySpendAP(state: ProgressionState, cost: number): SpendResult {
+  if (cost <= 0) return { state, spent: true };
+  if (state.automationPoints < cost) return { state, spent: false };
+  return { state: { ...state, automationPoints: state.automationPoints - cost }, spent: true };
 }
 
 // ---------------------------------------------------------------------------

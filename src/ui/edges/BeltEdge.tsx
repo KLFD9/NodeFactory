@@ -58,6 +58,41 @@ export function BeltEdge(props: EdgeProps) {
 
   return (
     <>
+      {/* Corps du convoyeur : bande large sous la ligne de flux, donne l'épaisseur physique. */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="#1c2127"
+        strokeWidth={9}
+        strokeLinecap="round"
+        opacity={0.85}
+        style={{ pointerEvents: 'none' }}
+      />
+      {/* Teinte par item : léger lavis de la couleur du flux sur le corps du convoyeur. */}
+      {hasFlow && (
+        <path
+          d={edgePath}
+          fill="none"
+          stroke={flowColor}
+          strokeWidth={9}
+          strokeLinecap="round"
+          opacity={0.12}
+          style={{ pointerEvents: 'none' }}
+        />
+      )}
+      {/* Texture « rouleaux » : segments clairs qui défilent le long du corps du convoyeur. */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="rgba(255,255,255,0.07)"
+        strokeWidth={9}
+        strokeLinecap="butt"
+        strokeDasharray="1 7"
+        style={{
+          animation: hasFlow ? `belt-ridge-flow ${flowDuration}s linear infinite` : undefined,
+          pointerEvents: 'none',
+        }}
+      />
       <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={baseStyle} />
       {hasFlow && (
         <path

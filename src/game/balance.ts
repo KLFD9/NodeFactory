@@ -141,6 +141,109 @@ export const AP_GENERATOR_BASE_COST = 50;
 export const AP_GENERATOR_BASE_PROD = 1.0;
 
 // ---------------------------------------------------------------------------
+// 3bis. COÛTS DE POSE EN AUTOMATION POINTS (AP) — par bâtiment
+//
+//    OBJECTIF DE FEEL : les 3 toutes premières poses du joueur (Miner Mk.1,
+//    Smelter, Coal Generator — le strict nécessaire pour démarrer la chaîne
+//    Iron Ingot ET alimenter ces deux machines en électricité dès le début,
+//    cf. réseau électrique actif sans gating) doivent être atteignables en
+//    ~2-3 min de jeu (Hook). Les paliers suivants montent en coût mais restent
+//    accessibles au rythme normal (AP_RATE_PER_ITEM_PER_MIN = 1/3).
+//
+//    HYPOTHÈSE DE BOOTSTRAP : [À VALIDER avec l'humain] le joueur démarre avec
+//    un capital initial de ~50 AP (don de bienvenue, hors balance.ts — géré par
+//    useProgressionStore). Sans ce capital, impossible de poser la toute
+//    première machine puisqu'aucune production n'a encore généré d'AP
+//    (chicken-and-egg). 50 AP couvre exactement les 3 premières poses
+//    (10 + 10 + 15 = 35 AP), avec 15 AP de marge pour une erreur de placement
+//    ou un 2e Miner.
+//
+//    PALIERS DE RÉFÉRENCE (AP/min approximatifs, à débit nominal 1.0) :
+//      - Démarrage (avant M1)  : 0 AP/min produit (bootstrap par capital initial)
+//      - Après M1 (Iron Ingot 30/min, 1 Smelter)      : ~10 AP/min
+//      - Après M2 (Iron Rod 15/min, +Constructor)     : ~5  AP/min/machine, 2-3 machines → ~15-25 AP/min
+//      - Après M5/M6 (Reinf. Plate, Miner Mk.3)       : usine multi-étages   → ~30-50 AP/min
+//      - Après M7+ (Manufacturer, Cable 30/min)       : usine mature          → ~50-80 AP/min
+// ---------------------------------------------------------------------------
+
+/**
+ * Coût en AP pour poser UNE instance d'un bâtiment donné.
+ *
+ * Justifications (temps d'attente à débit AP du palier correspondant) :
+ *
+ *  - `miner-mk1`   = 10 AP : starter, couvert par le capital initial (bootstrap).
+ *  - `smelter`     = 10 AP : starter, couvert par le capital initial (bootstrap).
+ *  - `coal-generator` = 15 AP : starter "infra" (réseau électrique dès le début),
+ *      légèrement plus cher car bâtiment de soutien (pas de production directe
+ *      d'items comptés dans l'AP) ; couvert par le capital initial (35/50 AP).
+ *      Sous-total 3 premières poses = 35 AP ≤ 50 AP (capital initial).
+ *
+ *  - `constructor` = 40 AP : débloqué à M1 (~2 min). À 10 AP/min (1 Smelter
+ *      tournant), ≈ 4 min pour se l'offrir → tombe pile dans la fenêtre Hook
+ *      (objectif "premier milestone ~5 min" du skill game-design : 2 min pour
+ *      M1 + 4 min d'épargne ≈ 6 min, acceptable car le joueur peut accélérer en
+ *      ajoutant un 2e Smelter entretemps).
+ *
+ *  - `miner-mk2`   = 120 AP : débloqué à M2 (~10 min cumulés). Avec 2-3 machines
+ *      tournant (Smelter + Constructor), AP/min ≈ 15-20 → ≈ 6-8 min d'épargne.
+ *      Gate de capacité valorisée (×2 extraction) : coût "premium" volontaire.
+ *
+ *  - `assembler`   = 150 AP : débloqué à M3 (~15 min cumulés). Même palier
+ *      d'AP/min (~15-20) → ≈ 8-10 min d'épargne. Le saut vers les recettes
+ *      2-ingrédients justifie un coût similaire au Miner Mk.2.
+ *
+ *  - `foundry`     = 250 AP : débloqué à M5 (~15 min après M4, usine plus
+ *      large). AP/min ≈ 30-40 (3-4 machines) → ≈ 6-8 min d'épargne. Ouvre les
+ *      alliages (Steel) — bâtiment "porte d'entrée" d'une nouvelle branche.
+ *
+ *  - `miner-mk3`   = 400 AP : débloqué à M6 (~17 min après M5). AP/min ≈ 30-40
+ *      → ≈ 10-13 min d'épargne. Deuxième gate de capacité (×4 extraction),
+ *      coût premium cohérent avec Miner Mk.2 (×3.3 le coût pour ×2 le saut
+ *      d'extraction relatif : Mk.2→Mk.3 double encore la capacité de Mk.2).
+ *
+ *  - `manufacturer` = 500 AP : débloqué à M7 (~10 min après M6). Usine mature,
+ *      AP/min ≈ 50-80 (multi-branches) → ≈ 6-10 min d'épargne. Bâtiment 4
+ *      entrées = pivot vers les produits complexes (Hobby).
+ *
+ *  - `refinery`    = 600 AP : pas encore gaté par un milestone dédié (réservé
+ *      pour une future branche pétrole/plastique) ; calé légèrement au-dessus
+ *      du Manufacturer (consommation 30 MW, la plus élevée après Manufacturer
+ *      55 MW) → ≈ 8-12 min d'épargne au palier M7+.
+ *
+ *  - `splitter` / `merger` = 5 AP : bâtiments logistiques passifs (0 MW,
+ *      0 production), coût symbolique pour éviter le spam gratuit sans freiner
+ *      le joueur — accessible dès le bootstrap (5 AP << 50 AP initiaux).
+ *
+ * [À VALIDER avec l'humain : montants exacts ±20 % possibles sans casser la
+ *  cohérence des paliers tant que l'ordre relatif est préservé.]
+ */
+/**
+ * Capital initial d'AP au démarrage (don de bienvenue, hors production).
+ * Couvre exactement les 3 premières poses (miner-mk1 + smelter + coal-generator =
+ * 10 + 10 + 15 = 35 AP), avec 15 AP de marge — cf. justification ci-dessus.
+ */
+export const STARTING_AP = 50;
+
+export const BUILDING_COSTS: Record<string, number> = {
+  'miner-mk1': 10,
+  'miner-mk2': 120,
+  'miner-mk3': 400,
+  smelter: 10,
+  foundry: 250,
+  constructor: 40,
+  assembler: 150,
+  manufacturer: 500,
+  refinery: 600,
+  'coal-generator': 15,
+  splitter: 5,
+  merger: 5,
+  // `power-pole` = 5 AP : hub de dispatch électrique passif (0 MW), même tarif que les hubs
+  // logistiques (splitter/merger) — accessible dès le bootstrap (réseau électrique actif
+  // dès le début, cf. coal-generator).
+  'power-pole': 5,
+};
+
+// ---------------------------------------------------------------------------
 // 4. MILESTONES DE PRODUCTION — 10 paliers
 //    Conçus pour le FEEL : Hook rapide, deux gates de capacité (Miner Mk.2 / Mk.3),
 //    interleave bâtiments / recettes-alternatives.

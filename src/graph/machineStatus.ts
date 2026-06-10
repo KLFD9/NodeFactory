@@ -55,7 +55,7 @@ export function buildNodeFlowMap(
 }
 
 /** État opérationnel d'une machine configurée. */
-export type MachineState = 'nominal' | 'starved' | 'blocked';
+export type MachineState = 'nominal' | 'starved' | 'blocked' | 'unpowered';
 
 /** Un input requis mais insuffisamment alimenté (la cause d'un goulot). */
 export interface MissingInput {
@@ -85,19 +85,29 @@ export interface MachineStatus {
  * mais non branchée est « en attente » (rouge), pas « nominale ». Les extracteurs sont toujours
  * nominaux (ils produisent depuis le gisement).
  *
- * @param data  Données du node.
- * @param flow  Flux réel mesuré pour ce node (depuis `buildNodeFlowMap`), ou undefined si isolé.
- * @param game  Données du jeu.
+ * @param data     Données du node.
+ * @param flow     Flux réel mesuré pour ce node (depuis `buildNodeFlowMap`), ou undefined si isolé.
+ * @param game     Données du jeu.
+ * @param powered  Le réseau électrique de ce node couvre-t-il sa demande ?
+ *                  (depuis `computePowerNetworks`). Par défaut `true` (rétro-compatible :
+ *                  un node hors-jeu/non câblé est traité comme alimenté tant que l'appelant
+ *                  ne fournit pas l'info réseau).
  */
 export function computeMachineStatus(
   data: MachineNodeData,
   flow: NodeActualFlow | undefined,
   game: GameData,
+  powered = true,
 ): MachineStatus {
   const info = computeNodeInfo(data, game);
   const building = info.building;
   if (!building || !info.configured) {
     return { configured: false, state: null, efficiency: 1, missing: [] };
+  }
+  // Priorité absolue : un bâtiment consommateur (powerMW > 0) non alimenté ne tourne pas
+  // du tout, quel que soit son approvisionnement en matières.
+  if (building.category !== 'power' && building.powerMW > 0 && !powered) {
+    return { configured: true, state: 'unpowered', efficiency: 0, missing: [] };
   }
   if (building.category === 'extraction' || info.inputs.length === 0) {
     return { configured: true, state: 'nominal', efficiency: 1, missing: [] };

@@ -3,6 +3,7 @@ import { useFactoryStore } from '@/store/useFactoryStore';
 import { useGraphStore } from '@/store/useGraphStore';
 import { useProgressionStore } from '@/store/useProgressionStore';
 import { computeFactory } from '@/graph/computeFactory';
+import { computeNodeInfo } from '@/graph/nodeInfo';
 
 /** Intervalle du tick de progression (ms). 1 s = accrual fluide sans surcoût. */
 const TICK_MS = 1000;
@@ -48,11 +49,27 @@ export function useProgressionTick(): void {
       const denom = outThroughput + deficitThroughput;
       const efficiency = denom > 0 ? outThroughput / denom : 1;
 
+      // Calcul de la production de chaque machine
+      const nodeProductions: { nodeId: string; itemId: string; ratePerMin: number }[] = [];
+      for (const node of nodes) {
+        const info = computeNodeInfo(node.data, gameData);
+        if (!info.building || info.building.category === 'logistics' || !info.configured) continue;
+        const count = Math.max(1, node.data.count ?? 1);
+        for (const out of info.outputs) {
+          nodeProductions.push({
+            nodeId: node.id,
+            itemId: out.itemId,
+            ratePerMin: out.ratePerMin * count,
+          });
+        }
+      }
+
       useProgressionStore.getState().tick({
         grossProduction: summary.production.map((f) => ({
           itemId: f.itemId,
           ratePerMin: f.ratePerMin,
         })),
+        nodeProductions,
         totalOutputPerMin: outThroughput,
         efficiency,
         dtMin,

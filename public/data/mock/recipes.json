@@ -1,5 +1,14 @@
 [
   {
+    "id": "coal-generator-power",
+    "name": "Coal Generator",
+    "alternate": false,
+    "time": 2,
+    "producedIn": "coal-generator",
+    "ingredients": [{ "item": "coal", "amountPerCycle": 1 }],
+    "products": [{ "item": "electricity", "amountPerCycle": 1 }]
+  },
+  {
     "id": "iron-ingot",
     "name": "Iron Ingot",
     "alternate": false,
