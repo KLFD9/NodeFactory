@@ -69,6 +69,13 @@ export interface FactorySummary {
   rawInputs: ItemRate[];
   /** Excédents (net > 0). */
   surplus: ItemRate[];
+  /**
+   * Production BRUTE par item (avant déduction de la consommation aval).
+   * Contrairement à `surplus`, inclut les intermédiaires entièrement consommés —
+   * c'est la base des milestones de production de la couche jeu (« produire N lingots »
+   * compte même si les lingots sont consommés en aval). Trié par débit décroissant.
+   */
+  production: ItemRate[];
   edges: EdgePlan[];
 }
 
@@ -188,12 +195,17 @@ export function computeFactory(
   });
 
   const byRate = (a: ItemRate, b: ItemRate) => b.ratePerMin - a.ratePerMin;
+  const grossProduction: ItemRate[] = [];
+  for (const [id, rate] of production) {
+    if (rate > 0) grossProduction.push({ itemId: id, itemName: itemName(id), ratePerMin: round(rate) });
+  }
   return {
     totalMachines,
     totalPowerMW: round(totalPowerMW),
     deficits: deficits.sort(byRate),
     rawInputs: rawInputs.sort(byRate),
     surplus: surplus.sort(byRate),
+    production: grossProduction.sort(byRate),
     edges: edgePlans,
   };
 }

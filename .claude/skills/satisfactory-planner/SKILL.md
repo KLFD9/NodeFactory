@@ -10,6 +10,14 @@ Web app, open source, gratuit, 100% client. L'utilisateur fixe une production ci
 recettes (y compris alternatives), convoyeurs, énergie et matières premières — le tout
 dans un éditeur de nœuds React Flow.
 
+> **NodeFactory est aussi devenu un jeu.** Le planner d'optimisation s'est mué en hybride
+> **factory-builder + idle/automation web** : la couche jeu (milestones, déblocages, idle/offline,
+> prestige, score d'efficacité) se construit **par-dessus** ce cœur planner, sans jamais le corrompre.
+> Ce skill porte le **cœur planner** (solveur, données, graphe, store, persistance). Pour tout ce qui
+> touche au **gameplay / progression / longévité / équilibrage**, charge le skill **`game-design`** —
+> et respecte son découplage : `game` lit `solver`/`data`, jamais l'inverse ; le solveur reste un LP
+> pur sans état de jeu.
+
 ## Vision produit (non négociable)
 **Extrêmement simple pour le débutant, puissant pour l'expert.** DEUX modes co-égaux, **un seul
 solveur LP** derrière les deux :

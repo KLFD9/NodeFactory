@@ -1,13 +1,8 @@
 import { useFactoryStore } from '@/store/useFactoryStore';
 import { useGraphStore } from '@/store/useGraphStore';
-import type { Purity } from '@/data/types';
+import { useProgressionStore } from '@/store/useProgressionStore';
+import { isRecipeUnlocked } from '@/game/progression';
 import { computeNodeInfo, recipesForBuilding } from '@/graph/nodeInfo';
-
-const PURITIES: { value: Purity; label: string }[] = [
-  { value: 'impure', label: 'Impur' },
-  { value: 'normal', label: 'Normal' },
-  { value: 'pure', label: 'Pur' },
-];
 
 /** Panneau de configuration du node sélectionné. Vide si rien n'est sélectionné. */
 export function Inspector() {
@@ -16,6 +11,7 @@ export function Inspector() {
   const node = useGraphStore((s) => s.nodes.find((n) => n.id === s.selectedNodeId));
   const updateNodeData = useGraphStore((s) => s.updateNodeData);
   const duplicateSelection = useGraphStore((s) => s.duplicateSelection);
+  const unlockedRecipes = useProgressionStore((s) => s.unlockedRecipes);
 
   if (!gameData || !selectedNodeId || !node) {
     return (
@@ -32,7 +28,10 @@ export function Inspector() {
 
   const round = (n: number) => Math.round(n * 1000) / 1000;
   const rawItems = gameData.items.filter((i) => i.raw);
-  const recipes = recipesForBuilding(building.id, gameData);
+  // Masque les recettes alternatives non débloquées (les standard restent toujours visibles).
+  const recipes = recipesForBuilding(building.id, gameData).filter((r) =>
+    isRecipeUnlocked({ unlockedRecipes }, r.id),
+  );
 
   return (
     <div className="flex flex-col gap-4 text-sm">
@@ -61,42 +60,20 @@ export function Inspector() {
       </div>
 
       {building.category === 'extraction' && (
-        <div className="flex flex-col gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-400">Ressource extraite</label>
-            <select
-              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm"
-              value={node.data.resourceId ?? ''}
-              onChange={(e) => updateNodeData(node.id, { resourceId: e.target.value || undefined })}
-            >
-              <option value="">— choisir —</option>
-              {rawItems.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-400">Pureté du nœud</label>
-            <div className="flex gap-1">
-              {PURITIES.map((p) => (
-                <button
-                  key={p.value}
-                  type="button"
-                  onClick={() => updateNodeData(node.id, { purity: p.value })}
-                  className={[
-                    'flex-1 rounded-md border px-2 py-1 text-xs',
-                    (node.data.purity ?? 'normal') === p.value
-                      ? 'border-orange-500 bg-orange-500/10 text-orange-300'
-                      : 'border-zinc-700 text-zinc-300',
-                  ].join(' ')}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-zinc-400">Ressource extraite</label>
+          <select
+            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm"
+            value={node.data.resourceId ?? ''}
+            onChange={(e) => updateNodeData(node.id, { resourceId: e.target.value || undefined })}
+          >
+            <option value="">— choisir —</option>
+            {rawItems.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.name}
+              </option>
+            ))}
+          </select>
         </div>
       )}
 

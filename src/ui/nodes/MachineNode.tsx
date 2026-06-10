@@ -5,6 +5,7 @@ import { useFactoryStore } from '@/store/useFactoryStore';
 import { useGraphStore } from '@/store/useGraphStore';
 import type { MachineNode as MachineNodeType, MachineNodeData } from '@/store/useGraphStore';
 import { computeNodeInfo } from '@/graph/nodeInfo';
+import { computeMachineStatus, type MachineState } from '@/graph/machineStatus';
 import { ExtractionIcon, SmeltingIcon, ManufacturingIcon, LogisticsIcon } from '@/ui/icons';
 import { NodeFlowContext } from '@/ui/NodeFlowContext';
 
@@ -21,6 +22,13 @@ const CATEGORY_COLOR: Record<string, string> = {
   smelting:      '#f97316', // orange-500
   manufacturing: '#38bdf8', // sky-400
   logistics:     '#71717a', // zinc-500
+};
+
+/** Styles du badge d'état (REC-04). L'état lui-même est calculé par `computeMachineStatus`. */
+const STATE_STYLE: Record<MachineState, { color: string; label: string }> = {
+  nominal: { color: '#10b981', label: 'Nominal' },       // emerald-500 : pleine capacité
+  starved: { color: '#f59e0b', label: 'Sous-alim.' },    // amber-500   : alimentation insuffisante
+  blocked: { color: '#ef4444', label: 'En attente' },    // red-500     : aucune matière reçue
 };
 
 /** Barre fine animée montrant la progression du cycle de production. */
@@ -117,20 +125,9 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
   // Flux réellement mesuré sur les arêtes de ce node.
   const actualFlow = flowMap.get(id);
 
-  // Efficacité = fraction d'input réellement reçu / capacité théorique (extraction = 1 toujours).
-  const efficiency = (() => {
-    if (!building || !info.configured) return 1;
-    if (building.category === 'extraction') return 1;
-    if (!actualFlow || info.inputs.length === 0) return 1;
-    let minEff = 1;
-    for (const inp of info.inputs) {
-      if (inp.ratePerMin > 0) {
-        const actual = actualFlow.inputs.get(inp.itemId) ?? 0;
-        minEff = Math.min(minEff, actual / inp.ratePerMin);
-      }
-    }
-    return Math.max(0, Math.min(1, minEff));
-  })();
+  // État + efficacité via le helper PUR partagé (même source de vérité que l'audit bottleneck).
+  const status = computeMachineStatus(data, actualFlow, gameData);
+  const efficiency = status.efficiency;
 
   // Durée d'un cycle de production :
   //  • extracteur → 60 / débit de sortie (1 item = 1 cycle)
@@ -145,12 +142,8 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
     return efficiency > 0.01 ? base / efficiency : 0;
   })();
 
-  // Couleur du point d'activité selon l'efficacité (indépendant de la catégorie).
-  const dotColor = efficiency >= 0.99
-    ? '#10b981'   // emerald-500 : à pleine capacité
-    : efficiency >= 0.5
-      ? '#f59e0b' // amber-500 : sous-alimenté
-      : '#ef4444'; // red-500 : sévèrement sous-alimenté
+  // État opérationnel pour le badge (REC-04). null = node non configuré (pas de badge).
+  const machineState = status.state;
 
   const accentColor = building ? (CATEGORY_COLOR[building.category] ?? '#71717a') : '#71717a';
 
@@ -245,14 +238,32 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
           <span className="font-bold tracking-tight text-zinc-100">{building?.name ?? data.buildingId}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          {info.configured && cycleTime > 0 && (
+          {machineState && (
             <span
-              className="h-1.5 w-1.5 rounded-full"
+              title={`${STATE_STYLE[machineState].label} · ${Math.round(efficiency * 100)} %`}
+              className="flex items-center gap-1 rounded-full px-1 py-0.5"
               style={{
-                background: dotColor,
-                animation: 'nf-activity-dot 1.5s ease-in-out infinite',
+                background:
+                  machineState === 'nominal' ? 'transparent' : `${STATE_STYLE[machineState].color}1a`,
               }}
-            />
+            >
+              <span
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{
+                  background: STATE_STYLE[machineState].color,
+                  animation:
+                    machineState === 'nominal' ? undefined : 'nf-activity-dot 1s ease-in-out infinite',
+                }}
+              />
+              {machineState !== 'nominal' && (
+                <span
+                  className="text-[8px] font-bold uppercase tracking-wide"
+                  style={{ color: STATE_STYLE[machineState].color }}
+                >
+                  {STATE_STYLE[machineState].label}
+                </span>
+              )}
+            </span>
           )}
           {info.powerMW > 0 && (
             <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[9px] font-semibold text-zinc-400">

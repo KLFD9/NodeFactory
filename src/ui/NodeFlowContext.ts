@@ -1,14 +1,7 @@
 import { createContext } from 'react';
+import type { NodeActualFlow, NodeFlowMap } from '@/graph/machineStatus';
 
-/** Flux réellement mesuré sur les arêtes connectées à un node. */
-export interface NodeActualFlow {
-  /** Somme des débits entrants par item (arêtes → target). */
-  inputs: Map<string, number>;
-  /** Somme des débits sortants par item (arêtes source →). */
-  outputs: Map<string, number>;
-}
-
-/** Map nodeId → flux réel mesuré. Vide = aucune arête connectée ou gameData absent. */
-export type NodeFlowMap = Map<string, NodeActualFlow>;
+// Les types vivent dans la couche graph (pure) ; on les réexporte pour compat.
+export type { NodeActualFlow, NodeFlowMap };
 
 export const NodeFlowContext = createContext<NodeFlowMap>(new Map());

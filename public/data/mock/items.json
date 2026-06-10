@@ -2,8 +2,10 @@
   { "id": "iron-ore", "name": "Iron Ore", "category": "raw", "raw": true },
   { "id": "copper-ore", "name": "Copper Ore", "category": "raw", "raw": true },
   { "id": "limestone", "name": "Limestone", "category": "raw", "raw": true },
+  { "id": "coal", "name": "Coal", "category": "raw", "raw": true },
   { "id": "iron-ingot", "name": "Iron Ingot", "category": "ingot", "raw": false },
   { "id": "copper-ingot", "name": "Copper Ingot", "category": "ingot", "raw": false },
+  { "id": "steel", "name": "Steel Ingot", "category": "ingot", "raw": false },
   { "id": "iron-plate", "name": "Iron Plate", "category": "part", "raw": false },
   { "id": "iron-rod", "name": "Iron Rod", "category": "part", "raw": false },
   { "id": "screw", "name": "Screw", "category": "part", "raw": false },
@@ -11,5 +13,11 @@
   { "id": "modular-frame", "name": "Modular Frame", "category": "part", "raw": false },
   { "id": "wire", "name": "Wire", "category": "part", "raw": false },
   { "id": "cable", "name": "Cable", "category": "part", "raw": false },
-  { "id": "concrete", "name": "Concrete", "category": "part", "raw": false }
+  { "id": "concrete", "name": "Concrete", "category": "part", "raw": false },
+  { "id": "copper-sheet", "name": "Copper Sheet", "category": "part", "raw": false },
+  { "id": "plastic-rod", "name": "Plastic Rod", "category": "part", "raw": false },
+  { "id": "circuit-board", "name": "Circuit Board", "category": "part", "raw": false },
+  { "id": "motor", "name": "Motor", "category": "part", "raw": false },
+  { "id": "heavy-frame", "name": "Heavy Frame", "category": "part", "raw": false },
+  { "id": "computer", "name": "Computer", "category": "part", "raw": false }
 ]

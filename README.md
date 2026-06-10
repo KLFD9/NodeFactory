@@ -67,10 +67,15 @@ du LP et calculée sur le graphe.
 - [x] Dossier d'extraction préparé (README + stub `extract.ts`)
 - [x] Éditeur de nœuds manuel (palette par catégorie, drag & drop, inspecteur, multiplicateur)
 - [x] Couche de calcul du graphe (machines, énergie, bilan matière, tiering convoyeur) + tests
-- [x] Solveur LP (glpk.js) + auto-génération du graphe depuis une cible (tests 1-7)
+- [x] Solveur LP (glpk.js) au service de l'assistance et du score (tests 1-7)
 - [x] Splitters/mergers réels (arbres 3-voies), propagation de flux, insertion sur arête (+/drop)
 - [x] Optimisation assistée : « Compléter l'usine » (comble les déficits, greffe + branche l'amont)
-- [ ] Persistance locale + partage URL (tests 11-12)
+- [x] Couche jeu : progression (AP, milestones, déblocages), tick live + gains offline, panneau
+      d'objectifs + pop-up de déblocage
+- [ ] Score d'efficacité affiché · audit bottleneck · prestige · persistance graphe + partage URL
+
+> **Note** : l'auto-génération « tape X/min → usine complète » a été retirée — NodeFactory devient un
+> jeu de construction : tu poses ton usine, le solveur t'assiste (« Compléter ») et te note.
 
 ## Licence
 

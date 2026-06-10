@@ -149,3 +149,64 @@ describe('solveFactory', () => {
     ).rejects.toBeInstanceOf(SolverError);
   });
 });
+
+describe('économie maison v1 — paliers 2/3', () => {
+  it('steel : 30/min → 3 Foundries, iron-ore 90 + coal 30, 48 MW', async () => {
+    const r = await solveFactory({
+      data: game,
+      targetItem: 'steel',
+      targetRate: 30,
+      objective: 'raw-resources',
+    });
+    // 1 steel/6s = 10/min ; 30/min → 3 Foundries (16 MW chacune).
+    expect(sel(r, 'steel')?.machineCount).toBe(3);
+    expect(r.totalMachines).toBe(3);
+    expect(r.totalPowerMW).toBe(48);
+    // 3 ore + 1 coal par cycle × 30 cycles/min.
+    expect(r.rawInputs).toEqual([
+      { item: 'iron-ore', rate: 90 },
+      { item: 'coal', rate: 30 },
+    ]);
+  });
+
+  it('circuit-board : multi-branches (copper-sheet + plastic-rod), coal en brut', async () => {
+    const r = await solveFactory({
+      data: game,
+      targetItem: 'circuit-board',
+      targetRate: 7.5,
+      objective: 'raw-resources',
+    });
+    // 1/8s = 7.5/min → exactement 1 Assembler.
+    expect(sel(r, 'circuit-board')?.machineCount).toBe(1);
+    // Les deux branches amont sont sollicitées.
+    expect(sel(r, 'copper-sheet')).toBeDefined();
+    expect(sel(r, 'plastic-rod')).toBeDefined();
+    // Le charbon (brut) alimente la branche plastic-rod.
+    expect(r.rawInputs.find((f) => f.item === 'coal')?.rate).toBeCloseTo(30, 5);
+  });
+
+  it('computer : ratio « élégant » 1 Manufacturer ↔ 1 Assembler circuit-board', async () => {
+    const r = await solveFactory({
+      data: game,
+      targetItem: 'computer',
+      targetRate: 2.5,
+      objective: 'raw-resources',
+    });
+    // 1/24s = 2.5/min → 1 Manufacturer ; il consomme 7.5/min de circuit-board = 1 Assembler pile.
+    expect(sel(r, 'computer')?.machineCount).toBe(1);
+    expect(sel(r, 'circuit-board')?.machineCount).toBe(1);
+  });
+
+  it('motor : convergence acier (P2) + plaque renforcée (P1)', async () => {
+    const r = await solveFactory({
+      data: game,
+      targetItem: 'motor',
+      targetRate: 5,
+      objective: 'raw-resources',
+    });
+    // 1/12s = 5/min → 1 Assembler ; relie les deux branches.
+    expect(sel(r, 'motor')?.machineCount).toBe(1);
+    expect(sel(r, 'steel')).toBeDefined();
+    expect(sel(r, 'reinforced-iron-plate')).toBeDefined();
+  });
+});

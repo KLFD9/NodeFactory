@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useFactoryStore } from '@/store/useFactoryStore';
+import { useProgressionStore } from '@/store/useProgressionStore';
+import { isBuildingUnlocked } from '@/game/progression';
 import type { Building, BuildingCategory } from '@/data/types';
 
 import { ExtractionIcon, SmeltingIcon, ManufacturingIcon, LogisticsIcon } from '@/ui/icons';
@@ -27,11 +29,15 @@ export const PALETTE_MIME = 'application/nodefactory-building';
  */
 export function Palette() {
   const gameData = useFactoryStore((s) => s.gameData);
+  // Référence stable entre les ticks (le sélecteur ne change que lors d'un déblocage).
+  const unlockedBuildings = useProgressionStore((s) => s.unlockedBuildings);
   const [query, setQuery] = useState('');
   if (!gameData) return <p className="text-xs text-zinc-500">Chargement…</p>;
 
   const q = query.trim().toLowerCase();
-  const matches = (b: Building) => !q || b.name.toLowerCase().includes(q);
+  // Disponible = correspond à la recherche ET débloqué (kit de base + milestones franchis).
+  const matches = (b: Building) =>
+    (!q || b.name.toLowerCase().includes(q)) && isBuildingUnlocked({ unlockedBuildings }, b.id);
 
   const onDragStart = (e: React.DragEvent, building: Building) => {
     e.dataTransfer.setData(

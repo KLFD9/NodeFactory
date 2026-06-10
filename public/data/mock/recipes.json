@@ -96,6 +96,89 @@
     "products": [{ "item": "concrete", "amountPerCycle": 1 }]
   },
   {
+    "id": "steel",
+    "name": "Steel Ingot",
+    "alternate": false,
+    "time": 6,
+    "producedIn": "foundry",
+    "ingredients": [
+      { "item": "iron-ore", "amountPerCycle": 3 },
+      { "item": "coal", "amountPerCycle": 1 }
+    ],
+    "products": [{ "item": "steel", "amountPerCycle": 1 }]
+  },
+  {
+    "id": "copper-sheet",
+    "name": "Copper Sheet",
+    "alternate": false,
+    "time": 6,
+    "producedIn": "constructor",
+    "ingredients": [{ "item": "copper-ingot", "amountPerCycle": 2 }],
+    "products": [{ "item": "copper-sheet", "amountPerCycle": 1 }]
+  },
+  {
+    "id": "plastic-rod",
+    "name": "Plastic Rod",
+    "alternate": false,
+    "time": 8,
+    "producedIn": "refinery",
+    "ingredients": [
+      { "item": "concrete", "amountPerCycle": 3 },
+      { "item": "coal", "amountPerCycle": 2 }
+    ],
+    "products": [{ "item": "plastic-rod", "amountPerCycle": 2 }]
+  },
+  {
+    "id": "circuit-board",
+    "name": "Circuit Board",
+    "alternate": false,
+    "time": 8,
+    "producedIn": "assembler",
+    "ingredients": [
+      { "item": "copper-sheet", "amountPerCycle": 2 },
+      { "item": "plastic-rod", "amountPerCycle": 4 }
+    ],
+    "products": [{ "item": "circuit-board", "amountPerCycle": 1 }]
+  },
+  {
+    "id": "motor",
+    "name": "Motor",
+    "alternate": false,
+    "time": 12,
+    "producedIn": "assembler",
+    "ingredients": [
+      { "item": "steel", "amountPerCycle": 3 },
+      { "item": "reinforced-iron-plate", "amountPerCycle": 2 }
+    ],
+    "products": [{ "item": "motor", "amountPerCycle": 1 }]
+  },
+  {
+    "id": "heavy-frame",
+    "name": "Heavy Frame",
+    "alternate": false,
+    "time": 20,
+    "producedIn": "manufacturer",
+    "ingredients": [
+      { "item": "modular-frame", "amountPerCycle": 5 },
+      { "item": "steel", "amountPerCycle": 3 },
+      { "item": "concrete", "amountPerCycle": 5 }
+    ],
+    "products": [{ "item": "heavy-frame", "amountPerCycle": 1 }]
+  },
+  {
+    "id": "computer",
+    "name": "Computer",
+    "alternate": false,
+    "time": 24,
+    "producedIn": "manufacturer",
+    "ingredients": [
+      { "item": "circuit-board", "amountPerCycle": 3 },
+      { "item": "cable", "amountPerCycle": 6 },
+      { "item": "modular-frame", "amountPerCycle": 1 }
+    ],
+    "products": [{ "item": "computer", "amountPerCycle": 1 }]
+  },
+  {
     "id": "alt-cast-screw",
     "name": "Alternate: Cast Screw",
     "alternate": true,
