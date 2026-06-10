@@ -1,5 +1,5 @@
-import { useContext } from 'react';
-import { Handle, NodeToolbar, Position, useViewport, type NodeProps } from '@xyflow/react';
+import { useContext, useEffect } from 'react';
+import { Handle, NodeToolbar, Position, useViewport, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import type { Building } from '@/data/types';
 import { useFactoryStore } from '@/store/useFactoryStore';
 import { useGraphStore } from '@/store/useGraphStore';
@@ -259,6 +259,14 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
   const powerConnections = useContext(PowerConnectionsContext);
   const powerNetworkMap = useContext(PowerNetworkContext);
   const { zoom } = useViewport();
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  // Recalcule les ancrages d'arêtes côté React Flow quand l'orientation change,
+  // sinon les connexions restent attachées à la position d'origine du pin.
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [id, data.rotation, updateNodeInternals]);
+
   if (!gameData) return null;
 
   const info = computeNodeInfo(data, gameData);
@@ -459,7 +467,7 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
     <div
       style={styleVariables}
       className={[
-        'relative min-h-[76px] min-w-[220px] max-w-[260px] p-4.5 text-xs shadow-xl transition-all duration-300 nf-node-glass overflow-hidden',
+        'relative min-h-[76px] min-w-[220px] max-w-[260px] p-4.5 text-xs shadow-xl transition-all duration-300 nf-node-glass',
         silhouette,
         selected ? 'nf-node-selected-glow scale-[1.01]' : '',
       ].join(' ')}

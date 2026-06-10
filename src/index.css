@@ -252,15 +252,26 @@ body,
 
 /* Connection pin adjustments */
 .react-flow__handle.nf-handle-style {
-  width: 10px !important;
-  height: 10px !important;
+  width: 12px !important;
+  height: 12px !important;
   border: 2px solid #09090b !important;
+  scale: 1 !important;
+  z-index: 5;
   transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 .react-flow__handle.nf-handle-style:hover {
-  width: 14px !important;
-  height: 14px !important;
-  box-shadow: 0 0 8px var(--handle-color-glow, rgba(249, 115, 22, 0.6)) !important;
+  width: 16px !important;
+  height: 16px !important;
+  scale: 1 !important;
+  box-shadow: 0 0 10px 2px var(--handle-color-glow, rgba(249, 115, 22, 0.6)) !important;
+  z-index: 10;
+}
+.react-flow__handle.nf-handle-style.connectingfrom,
+.react-flow__handle.nf-handle-style.connectingto {
+  width: 16px !important;
+  height: 16px !important;
+  scale: 1 !important;
+  box-shadow: 0 0 10px 3px var(--handle-color-glow, rgba(16, 185, 129, 0.6)) !important;
 }
 
 /* Breathing pulse animation for HUD targeting brackets */
@@ -355,8 +366,95 @@ body,
   background-size: 8px 8px;
 }
 
+/* ── React Flow Controls Custom Styling ── */
+.react-flow__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(18, 18, 24, 0.85) !important;
+  border: 1px solid rgba(63, 63, 70, 0.4) !important;
+  border-radius: 8px !important;
+  padding: 4px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 
+              inset 0 1px 1px 0 rgba(255, 255, 255, 0.05) !important;
+  backdrop-filter: blur(8px) !important;
+}
 
+.react-flow__controls-button {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(63, 63, 70, 0.2) !important;
+  color: #d4d4d8 !important; /* text-zinc-300: High visibility */
+  width: 30px !important;
+  height: 30px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 120ms ease !important;
+  border-radius: 4px !important;
+  margin: 0 !important;
+}
 
+.react-flow__controls-button:last-child {
+  border-bottom: none !important;
+}
 
+.react-flow__controls-button svg {
+  fill: currentColor !important;
+  stroke: currentColor !important;
+  width: 14px !important;
+  height: 14px !important;
+  transition: transform 120ms ease !important;
+}
 
+/* Hover & Active States */
+.react-flow__controls-button:hover {
+  background: rgba(249, 115, 22, 0.15) !important; /* amber-500 soft glow background */
+  color: #fb923c !important; /* orange/amber-400 */
+  box-shadow: 0 0 8px rgba(249, 115, 22, 0.25) !important;
+}
 
+.react-flow__controls-button:hover svg {
+  transform: scale(1.15);
+}
+
+.react-flow__controls-button:active {
+  background: rgba(249, 115, 22, 0.25) !important;
+}
+
+/* ── React Flow MiniMap Custom Styling ── */
+.react-flow__minimap {
+  background: rgba(18, 18, 24, 0.85) !important;
+  border: 1px solid rgba(63, 63, 70, 0.4) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 
+              inset 0 1px 1px 0 rgba(255, 255, 255, 0.05) !important;
+  overflow: hidden !important;
+  pointer-events: auto !important; /* Force panel container to receive events */
+}
+
+/* Style style militaire/radar pour le masque */
+.react-flow__minimap-mask {
+  fill: rgba(18, 18, 24, 0.6) !important; /* Outside viewport dimming */
+  stroke: #f97316 !important; /* Bright orange border */
+  stroke-width: 1.5px !important;
+  stroke-dasharray: 4 2 !important; /* Dotted military radar style */
+  pointer-events: none !important; /* Let clicks pass through to the SVG */
+}
+
+/* Radar scanning grid effect inside the minimap */
+.react-flow__minimap svg {
+  background-image: 
+    linear-gradient(rgba(63, 63, 70, 0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(63, 63, 70, 0.15) 1px, transparent 1px) !important;
+  background-size: 8px 8px !important;
+  pointer-events: auto !important; /* Ensure the SVG canvas receives drag events */
+}
+
+.react-flow__minimap-node {
+  rx: 2px !important;
+  ry: 2px !important;
+  stroke-width: 0.5px !important;
+  stroke: rgba(0, 0, 0, 0.5) !important;
+  pointer-events: none !important; /* Let clicks pass through to the SVG */
+}

@@ -284,6 +284,16 @@ function Flow() {
     () => (gameData ? gameData.items.filter((i) => i.raw).map((i) => i.id) : []),
     [gameData],
   );
+  const getMiniMapNodeColor = useCallback((node: MachineNodeType) => {
+    const category = node.data?.category;
+    if (category === 'extraction') return '#f59e0b';
+    if (category === 'smelting') return '#f97316';
+    if (category === 'manufacturing') return '#38bdf8';
+    if (category === 'logistics') return '#71717a';
+    if (category === 'power') return '#10b981';
+    return '#3f3f46';
+  }, []);
+
   const onRegenerate = useCallback(() => {
     if (window.confirm('Régénérer la carte ? Les mineurs posés seront détachés de leur gisement.')) {
       regenerate(rawItemIds);
@@ -338,9 +348,9 @@ function Flow() {
         <MiniMap
           pannable
           zoomable
-          nodeColor="#3f3f46"
-          maskColor="rgba(9,9,11,0.7)"
-          className="!bg-zinc-900"
+          nodeColor={getMiniMapNodeColor}
+          maskColor="transparent"
+          className="react-flow__minimap"
         />
       </ReactFlow>
     </div>
