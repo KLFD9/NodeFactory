@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Background,
   Controls,
@@ -64,7 +64,7 @@ function Flow() {
   const copySelection = useGraphStore((s) => s.copySelection);
   const paste = useGraphStore((s) => s.paste);
   const duplicateSelection = useGraphStore((s) => s.duplicateSelection);
-  const { screenToFlowPosition, fitView } = useReactFlow();
+  const { screenToFlowPosition, fitView, setCenter } = useReactFlow();
   const nodeTypes = useMemo<NodeTypes>(() => ({ machine: MachineNode }), []);
   const edgeTypes = useMemo(() => ({ belt: BeltEdge, power: PowerEdge }), []);
 
@@ -72,6 +72,21 @@ function Flow() {
   useEffect(() => {
     if (generation > 0) window.requestAnimationFrame(() => fitView({ duration: 300 }));
   }, [generation, fitView]);
+
+  // Cadrage initial : sur un canvas vierge, le viewport (0,0) ne montre AUCUN gisement
+  // (ils sont générés dans ±2600 px flow) — le nouveau joueur ne verrait qu'une grille
+  // vide. On centre une seule fois sur le gisement de fer le plus proche de l'origine :
+  // c'est la cible de la première étape du tutoriel (« clique un pin Iron Ore »).
+  const initialCenterDone = useRef(false);
+  useEffect(() => {
+    if (initialCenterDone.current || deposits.length === 0) return;
+    initialCenterDone.current = true;
+    if (useGraphStore.getState().nodes.length > 0) return; // usine existante : fitView gère.
+    const candidates = deposits.filter((d) => d.resourceId === 'iron-ore');
+    const pool = candidates.length > 0 ? candidates : deposits;
+    const target = pool.reduce((a, b) => (Math.hypot(a.x, a.y) <= Math.hypot(b.x, b.y) ? a : b));
+    void setCenter(target.x, target.y, { zoom: 0.6 });
+  }, [deposits, setCenter]);
 
   // Copié-collé (Cmd/Ctrl + C / V / D).
   useEffect(() => {

@@ -12,6 +12,18 @@ body,
   margin: 0;
 }
 
+/* Couche monde (ViewportPortal) : le portal hérite d'un pointer-events neutralisé
+   (le pane React Flow capte alors tous les clics) — les pins de gisement seraient
+   injouables. On neutralise explicitement le portal (blobs décoratifs transparents
+   aux clics) et on réactive UNIQUEMENT les pins (boutons). */
+.react-flow__viewport-portal {
+  z-index: 4;
+  pointer-events: none;
+}
+.react-flow__viewport-portal button {
+  pointer-events: auto;
+}
+
 /* ── Micro-interactions « juicy » sur l'éditeur ─────────────────────────── */
 
 /* Pads (handles) : grossissent et s'illuminent au survol, comme des points de snap. */

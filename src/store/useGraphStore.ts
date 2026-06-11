@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import {
   addEdge,
   applyEdgeChanges,
@@ -43,6 +44,14 @@ export type MachineNode = Node<MachineNodeData, 'machine'>;
 
 let nodeCounter = 0;
 const nextId = () => `node-${++nodeCounter}`;
+
+/** Recale le compteur d'ids sur les nodes restaurés (évite toute collision après reload). */
+function syncNodeCounter(nodes: MachineNode[]): void {
+  for (const n of nodes) {
+    const m = /^node-(\d+)$/.exec(n.id);
+    if (m) nodeCounter = Math.max(nodeCounter, Number(m[1]));
+  }
+}
 
 /**
  * Données initiales d'un node fraîchement posé.
@@ -129,7 +138,9 @@ export interface MinerBinding {
 const MINER_HALF_W = 110;
 const MINER_HALF_H = 40;
 
-export const useGraphStore = create<GraphState>((set, get) => ({
+export const useGraphStore = create<GraphState>()(
+  persist(
+    (set, get) => ({
   nodes: [],
   edges: [],
   selectedNodeId: null,
@@ -369,4 +380,16 @@ export const useGraphStore = create<GraphState>((set, get) => ({
           : n,
       ),
     })),
-}));
+    }),
+    {
+      // L'usine EST la sauvegarde du joueur : sans elle, un reload détruirait toute la
+      // production (et le taux d'AP retomberait à zéro) alors que la progression survit.
+      name: 'nf-graph',
+      version: 1,
+      partialize: (s) => ({ nodes: s.nodes, edges: s.edges }),
+      onRehydrateStorage: () => (state) => {
+        if (state) syncNodeCounter(state.nodes);
+      },
+    },
+  ),
+);

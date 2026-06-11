@@ -4,15 +4,16 @@ import { test, expect, type Page } from '@playwright/test';
  * Tests E2E du parcours joueur NodeFactory (boucle de jeu réelle, navigateur).
  *
  * Couvre ce que les tests unitaires ne peuvent pas voir : le câblage complet
- * data → stores → UI (palette gatée, pose payée en AP, récap offline, milestones).
- * Chaque scénario seed l'état persisté (localStorage `nf-progression`) AVANT le
- * chargement de la page — exactement ce que verrait un joueur qui revient.
+ * data → stores → UI (accueil, tutoriel, palette gatée, pose payée en AP, récap
+ * offline, milestones, persistance de l'usine). Chaque scénario seed l'état
+ * persisté (localStorage) AVANT le chargement — comme un joueur qui revient.
  */
 
 const PALETTE_MIME = 'application/nodefactory-building';
 const STORAGE_KEY = 'nf-progression';
+const WORLD_KEY = 'nf-world';
 
-/** État de progression par défaut (miroir de initialProgression). */
+/** État de progression par défaut (joueur déjà accueilli, tutoriel passé). */
 function progressionState(partial: Record<string, unknown> = {}) {
   return {
     automationPoints: 50,
@@ -24,17 +25,49 @@ function progressionState(partial: Record<string, unknown> = {}) {
     lastSeenMs: Date.now(),
     lastApRatePerMin: 0,
     prestigeCount: 0,
+    welcomeSeen: true,
+    tutorialDismissed: true,
     ...partial,
   };
 }
 
-/** Écrit l'état persisté AVANT que l'app ne se charge (format zustand/persist). */
+/**
+ * Écrit l'état persisté AVANT que l'app ne se charge (format zustand/persist).
+ * Idempotent : `addInitScript` rejoue à CHAQUE navigation (reload compris) — le
+ * marqueur évite d'écraser ce que le jeu a persisté depuis (tests de persistance).
+ */
 async function seedProgression(page: Page, partial: Record<string, unknown> = {}) {
   await page.addInitScript(
     ({ key, state }) => {
+      if (localStorage.getItem(`${key}:seeded`)) return;
+      localStorage.setItem(`${key}:seeded`, '1');
       localStorage.setItem(key, JSON.stringify({ state, version: 1 }));
     },
     { key: STORAGE_KEY, state: progressionState(partial) },
+  );
+}
+
+/** Monde déterministe : un seul gisement de fer (1 pin) près de l'origine. */
+async function seedWorld(page: Page) {
+  const deposits = [
+    {
+      id: 'dep-test',
+      resourceId: 'iron-ore',
+      purity: 'normal',
+      x: 200,
+      y: 200,
+      radius: 220,
+      blobPath: 'M -1 0 A 1 1 0 1 0 1 0 A 1 1 0 1 0 -1 0 Z',
+      pins: [{ x: 200, y: 200 }],
+    },
+  ];
+  await page.addInitScript(
+    ({ key, state }) => {
+      if (localStorage.getItem(`${key}:seeded`)) return;
+      localStorage.setItem(`${key}:seeded`, '1');
+      localStorage.setItem(key, JSON.stringify({ state, version: 2 }));
+    },
+    { key: WORLD_KEY, state: { seed: 1, deposits } },
   );
 }
 
@@ -62,39 +95,128 @@ function paletteItem(page: Page, name: string) {
   return page.locator('[draggable="true"]').filter({ hasText: name });
 }
 
+test.describe('Accueil (premier lancement)', () => {
+  test('première visite : écran d’accueil, « Commencer » lance le tutoriel', async ({ page }) => {
+    // AUCUN seed : profil totalement vierge.
+    await gotoReady(page);
+
+    const welcome = page.getByTestId('welcome-modal');
+    await expect(welcome).toBeVisible();
+    await expect(welcome).toContainText('Extrais');
+    await expect(welcome).toContainText('Automatise');
+    await expect(welcome).toContainText('Optimise');
+
+    await page.getByTestId('welcome-start').click();
+    await expect(welcome).toHaveCount(0);
+    // Le tutoriel prend le relais, étape 1.
+    await expect(page.getByTestId('tutorial-panel')).toBeVisible();
+    await expect(page.getByTestId('tutorial-panel')).toContainText('1/4');
+  });
+
+  test('joueur qui revient (welcomeSeen) : pas d’écran d’accueil', async ({ page }) => {
+    await seedProgression(page);
+    await gotoReady(page);
+    await expect(page.getByTestId('welcome-modal')).toHaveCount(0);
+  });
+});
+
+test.describe('Tutoriel (dérivé de l’état réel)', () => {
+  test('clic sur un pin de gisement → mineur posé → étape 2, puis Smelter → étape 3', async ({ page }) => {
+    await seedWorld(page);
+    await seedProgression(page, { tutorialDismissed: false });
+    await gotoReady(page);
+
+    const panel = page.getByTestId('tutorial-panel');
+    await expect(panel).toContainText('Extrais le fer');
+    await expect(panel).toContainText('1/4');
+
+    // Étape 1 : le cadrage initial centre le gisement → le pin est cliquable.
+    await page.locator('button[title*="Iron Ore"]').first().click();
+    await expect(page.locator('.react-flow__node')).toHaveCount(1);
+    await expect(panel).toContainText('2/4');
+
+    // Étape 2 : poser un Smelter.
+    await dropBuilding(page, 'smelter', 'smelting', 900, 300);
+    await expect(panel).toContainText('3/4');
+    await expect(panel).toContainText('Relie-les');
+  });
+
+  test('« Passer » masque le tutoriel définitivement (persiste au reload)', async ({ page }) => {
+    await seedProgression(page, { tutorialDismissed: false });
+    await gotoReady(page);
+
+    await page.getByTestId('tutorial-skip').click();
+    await expect(page.getByTestId('tutorial-panel')).toHaveCount(0);
+
+    await page.reload();
+    await expect(page.getByText('Données prêtes')).toBeVisible();
+    await expect(page.getByTestId('tutorial-panel')).toHaveCount(0);
+  });
+});
+
 test.describe('Premier contact (Hook)', () => {
   test('l’app charge : header, palette, objectifs', async ({ page }) => {
+    await seedProgression(page);
     await gotoReady(page);
 
     await expect(page.getByRole('heading', { name: /NodeFactory/ })).toBeVisible();
-    // Palette : kit de base disponible.
     await expect(page.getByRole('heading', { name: 'Composants' })).toBeVisible();
     await expect(paletteItem(page, 'Miner Mk.1')).toBeVisible();
     await expect(paletteItem(page, 'Smelter')).toBeVisible();
-    // Échelle d'objectifs (milestones) visible dès le départ.
     await expect(page.getByRole('heading', { name: 'Objectifs' })).toBeVisible();
   });
 
   test('gating : les bâtiments de milestone sont absents de la palette au départ', async ({ page }) => {
+    await seedProgression(page);
     await gotoReady(page);
 
-    // Kit de base présent…
     await expect(paletteItem(page, 'Coal Generator')).toBeVisible();
-    // …mais les récompenses de milestones M1-M7 sont verrouillées.
     for (const locked of ['Constructor', 'Miner Mk.2', 'Miner Mk.3', 'Assembler', 'Foundry', 'Manufacturer']) {
       await expect(paletteItem(page, locked)).toHaveCount(0);
     }
   });
 });
 
+test.describe('Objectifs (progressive disclosure)', () => {
+  test('au départ : objectif actif + 1 teaser, le reste masqué (pas de spoil)', async ({ page }) => {
+    await seedProgression(page);
+    await gotoReady(page);
+
+    const sidebar = page.locator('aside').first();
+    // Actif : M1.
+    await expect(sidebar).toContainText('Produis 60 Iron Ingot');
+    // Teaser : M2 (Miner Mk.2) visible.
+    await expect(sidebar).toContainText('Miner Mk.2');
+    // Le reste est caché : 13 paliers − actif − teaser = 11 à découvrir.
+    await expect(sidebar).toContainText('+11 paliers à découvrir');
+    // Pas de spoil du end-game.
+    await expect(sidebar).not.toContainText('Prestige');
+    await expect(sidebar).not.toContainText('Automated Motor');
+  });
+
+  test('paliers franchis : repliés dans un compteur compact', async ({ page }) => {
+    await seedProgression(page, {
+      cumulativeProduced: { 'iron-ingot': 100 },
+      reachedMilestones: ['ms-iron-ingot-60'],
+      unlockedBuildings: ['constructor'],
+    });
+    await gotoReady(page);
+
+    const sidebar = page.locator('aside').first();
+    await expect(sidebar).toContainText('1 palier franchi');
+    // L'objectif actif est passé à M2.
+    await expect(sidebar).toContainText('Produis 150 Iron Rod');
+  });
+});
+
 test.describe('Pose de bâtiments (coût AP)', () => {
   test('poser un Miner Mk.1 crée le node et débite 10 AP (50 → 40)', async ({ page }) => {
+    await seedProgression(page);
     await gotoReady(page);
 
     await dropBuilding(page, 'miner-mk1', 'extraction');
 
     await expect(page.locator('.react-flow__node')).toHaveCount(1);
-    // La status bar apparaît avec le solde débité.
     await expect(page.getByText('⚡ 40 AP')).toBeVisible();
   });
 
@@ -106,6 +228,22 @@ test.describe('Pose de bâtiments (coût AP)', () => {
 
     await expect(page.getByRole('alert')).toContainText('AP insuffisants');
     await expect(page.locator('.react-flow__node')).toHaveCount(0);
+  });
+});
+
+test.describe('Persistance de l’usine', () => {
+  test('l’usine et le solde survivent au reload', async ({ page }) => {
+    await seedProgression(page);
+    await gotoReady(page);
+
+    await dropBuilding(page, 'miner-mk1', 'extraction');
+    await expect(page.locator('.react-flow__node')).toHaveCount(1);
+
+    await page.reload();
+    await expect(page.getByText('Données prêtes')).toBeVisible();
+    // Le node restauré ET le solde débité (40 = 50 − 10) sont toujours là.
+    await expect(page.locator('.react-flow__node')).toHaveCount(1);
+    await expect(page.getByText('⚡ 40 AP')).toBeVisible();
   });
 });
 
@@ -160,7 +298,6 @@ test.describe('Progression (milestones)', () => {
     await gotoReady(page);
 
     await expect(paletteItem(page, 'Constructor')).toBeVisible();
-    // Les paliers suivants restent verrouillés.
     await expect(paletteItem(page, 'Assembler')).toHaveCount(0);
   });
 });
