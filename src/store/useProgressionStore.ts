@@ -43,6 +43,10 @@ interface ProgressionStore extends ProgressionState {
   dismissUnlocks: () => void;
   /** Ferme la popup récap offline. */
   dismissOfflineRecap: () => void;
+  /** Marque l'écran d'accueil comme vu (premier lancement). */
+  markWelcomeSeen: () => void;
+  /** Passe le tutoriel manuellement. */
+  dismissTutorial: () => void;
   /** Tente de dépenser `cost` AP (coût de pose). Renvoie true si débité, false si solde insuffisant. */
   spendAP: (cost: number) => boolean;
   /** Réinitialise toute la progression (debug / futur prestige). */
@@ -85,6 +89,10 @@ export const useProgressionStore = create<ProgressionStore>()(
 
       dismissOfflineRecap: () => set({ offlineRecap: null }),
 
+      markWelcomeSeen: () => set({ welcomeSeen: true }),
+
+      dismissTutorial: () => set({ tutorialDismissed: true }),
+
       spendAP: (cost) => {
         const { state: next, spent } = trySpendAP(get(), cost);
         if (spent) set(next);
@@ -107,6 +115,8 @@ export const useProgressionStore = create<ProgressionStore>()(
         lastSeenMs: s.lastSeenMs,
         lastApRatePerMin: s.lastApRatePerMin,
         prestigeCount: s.prestigeCount,
+        welcomeSeen: s.welcomeSeen,
+        tutorialDismissed: s.tutorialDismissed,
       }),
     },
   ),

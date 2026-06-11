@@ -93,6 +93,14 @@ function MilestoneRow({
  * progression + récompense), paliers à venir (verrouillés mais lisibles). C'est la
  * colonne vertébrale de la boucle : produire → débloquer → produire plus.
  */
+/**
+ * Progressive disclosure : on ne montre JAMAIS toute l'échelle d'un coup.
+ *   - paliers franchis : repliés dans un <details> compact (consultables au clic) ;
+ *   - palier ACTIF : carte avec barre de progression (le « but » du moment) ;
+ *   - palier SUIVANT : seul teaser visible (on sait ce qui vient, pas plus) ;
+ *   - le reste : simple compteur « +N paliers à découvrir » — récompenses cachées,
+ *     la surprise fait partie de la récompense (pas de spoil du end-game).
+ */
 export function MilestonePanel() {
   const gameData = useFactoryStore((s) => s.gameData);
   const cumulativeProduced = useProgressionStore((s) => s.cumulativeProduced);
@@ -102,6 +110,11 @@ export function MilestonePanel() {
   const reached = new Set(reachedMilestones);
   const activeIndex = MILESTONES.findIndex((m) => !reached.has(m.id));
   const allDone = activeIndex === -1;
+
+  const reachedList = MILESTONES.filter((m) => reached.has(m.id));
+  const active = allDone ? null : MILESTONES[activeIndex];
+  const next = !allDone && activeIndex + 1 < MILESTONES.length ? MILESTONES[activeIndex + 1] : null;
+  const hiddenCount = allDone ? 0 : Math.max(0, MILESTONES.length - activeIndex - 2);
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -114,24 +127,62 @@ export function MilestonePanel() {
         </p>
       </div>
 
+      {reachedList.length > 0 && (
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center gap-2 text-[11px] text-zinc-500 transition-colors hover:text-zinc-300">
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
+              ✓
+            </span>
+            <span>
+              {reachedList.length} palier{reachedList.length > 1 ? 's' : ''} franchi
+              {reachedList.length > 1 ? 's' : ''}
+            </span>
+            <span className="ml-auto text-zinc-700 transition-transform group-open:rotate-90">›</span>
+          </summary>
+          <ul className="mt-1.5 flex flex-col gap-1 pl-1">
+            {reachedList.map((m) => (
+              <MilestoneRow
+                key={m.id}
+                m={m}
+                phase="reached"
+                produced={cumulativeProduced[m.itemId] ?? 0}
+                progress={1}
+                game={gameData}
+              />
+            ))}
+          </ul>
+        </details>
+      )}
+
       <ul className="flex flex-col gap-1.5">
-        {MILESTONES.map((m, i) => {
-          const phase: Phase = reached.has(m.id)
-            ? 'reached'
-            : i === activeIndex
-              ? 'active'
-              : 'upcoming';
-          return (
-            <MilestoneRow
-              key={m.id}
-              m={m}
-              phase={phase}
-              produced={cumulativeProduced[m.itemId] ?? 0}
-              progress={milestoneProgress({ cumulativeProduced }, m)}
-              game={gameData}
-            />
-          );
-        })}
+        {active && (
+          <MilestoneRow
+            m={active}
+            phase="active"
+            produced={cumulativeProduced[active.itemId] ?? 0}
+            progress={milestoneProgress({ cumulativeProduced }, active)}
+            game={gameData}
+          />
+        )}
+        {next && (
+          <MilestoneRow
+            m={next}
+            phase="upcoming"
+            produced={cumulativeProduced[next.itemId] ?? 0}
+            progress={milestoneProgress({ cumulativeProduced }, next)}
+            game={gameData}
+          />
+        )}
+        {hiddenCount > 0 && (
+          <li className="flex items-center gap-2 pl-0.5 text-[11px] text-zinc-700">
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-zinc-800 text-[9px]">
+              ?
+            </span>
+            <span>
+              +{hiddenCount} palier{hiddenCount > 1 ? 's' : ''} à découvrir…
+            </span>
+          </li>
+        )}
       </ul>
     </div>
   );

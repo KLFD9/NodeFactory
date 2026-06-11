@@ -42,6 +42,10 @@ export interface ProgressionState {
   lastApRatePerMin: number;
   /** Nombre de prestiges effectués (multiplicateur permanent). */
   prestigeCount: number;
+  /** L'écran d'accueil (premier lancement) a été vu. */
+  welcomeSeen: boolean;
+  /** Le tutoriel a été passé manuellement (il disparaît de lui-même après M1). */
+  tutorialDismissed: boolean;
 }
 
 /** État de départ : tout à zéro, horloge calée sur maintenant. */
@@ -56,6 +60,8 @@ export function initialProgression(nowMs: number = Date.now()): ProgressionState
     lastSeenMs: nowMs,
     lastApRatePerMin: 0,
     prestigeCount: 0,
+    welcomeSeen: false,
+    tutorialDismissed: false,
   };
 }
 

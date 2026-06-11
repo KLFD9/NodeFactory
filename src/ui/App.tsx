@@ -13,6 +13,8 @@ import { FactorySummaryPanel } from './FactorySummaryPanel';
 import { UnlockToast } from './UnlockToast';
 import { PlacementDeniedToast } from './PlacementDeniedToast';
 import { OfflineRecapModal } from './OfflineRecapModal';
+import { WelcomeModal } from './WelcomeModal';
+import { TutorialPanel } from './TutorialPanel';
 import { useProgressionTick } from './useProgressionTick';
 import { ReactFlowProvider } from '@xyflow/react';
 
@@ -58,10 +60,21 @@ function StatusBar() {
   if (!gameData || nodes.length === 0) return null;
 
   const summary = computeFactory(nodes, edges, gameData);
+  // Machines posées mais sans recette/gisement : invisibles dans totalMachines (qui ne
+  // compte que les actives) → badge dédié, sinon « 0 machines » avec des nodes posés.
+  const unconfigured = nodes.filter((n) => {
+    const b = gameData.buildings.find((x) => x.id === n.data.buildingId);
+    if (!b || b.category === 'logistics') return false;
+    return b.category === 'extraction' ? !n.data.resourceId : !n.data.recipeId;
+  }).length;
+
   return (
     <footer className="flex items-center gap-4 border-t border-zinc-800 px-4 py-1.5 text-xs text-zinc-400">
-      <span>{summary.totalMachines} machines</span>
+      <span>{summary.totalMachines} machines actives</span>
       <span>{summary.totalPowerMW} MW</span>
+      {unconfigured > 0 && (
+        <span className="text-amber-400">⚙ {unconfigured} à configurer</span>
+      )}
       {summary.deficits.length > 0 && (
         <span className="text-red-400">⚠ {summary.deficits.length} déficit(s)</span>
       )}
@@ -110,7 +123,8 @@ export function App() {
       <div className="flex h-full flex-col bg-zinc-950 text-zinc-100">
         <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
           <h1 className="text-sm font-semibold tracking-tight">
-            NodeFactory <span className="text-zinc-500">— Satisfactory Planner</span>
+            Node<span className="text-amber-400">Factory</span>{' '}
+            <span className="text-zinc-500">— Construis · Automatise · Optimise</span>
           </h1>
           <span className="text-xs text-zinc-500">
             {dataStatus === 'loading' && 'Chargement des données…'}
@@ -168,6 +182,8 @@ export function App() {
         <UnlockToast />
         <PlacementDeniedToast />
         <OfflineRecapModal />
+        <WelcomeModal />
+        <TutorialPanel />
       </div>
     </ReactFlowProvider>
   );
