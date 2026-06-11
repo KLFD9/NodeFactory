@@ -289,7 +289,7 @@ export interface MilestoneDefinition {
 }
 
 /**
- * Table des 10 milestones — économie NodeFactory v1.
+ * Table des 13 milestones — économie NodeFactory v1 (M1-M10) + paliers 2/3 (M11-M13).
  *
  * Chaque valeur est vérifiée à la main :
  *   M1  : 60  / 30/min = 2.0 min  → unlock constructor (Hook)
@@ -302,6 +302,9 @@ export interface MilestoneDefinition {
  *   M8  : 375 / 15/min = 25.0 min → unlock alt-bolted-iron-plate
  *   M9  : 50  /  2/min = 25.0 min → unlock alt-iron-wire
  *   M10 : 150 /  2/min = 75.0 min → hint prestige-available
+ *   M11 : 200 / 10/min = 20.0 min → unlock alt-steel-cast      (Hobby, branche acier)
+ *   M12 : 75  /7.5/min = 10.0 min → unlock alt-fused-circuit   (Hobby, branche électronique)
+ *   M13 : 50  /  5/min = 10.0 min → unlock alt-automated-motor (Hobby, optimisation max)
  */
 export const MILESTONES: MilestoneDefinition[] = [
   {
@@ -383,6 +386,32 @@ export const MILESTONES: MilestoneDefinition[] = [
     unlocks: { type: 'hint', id: 'prestige-available' },
     // 150 / 2 = 75.0 min (1 Assembler). Horizon Hobby — prestige débloqué pour l'expert.
     estimatedMinutesNominal: 75.0,
+  },
+  // --- Paliers 2/3 (économie maison v1, spec 2026-06-10 §7) : les 3 alts avancées
+  //     sont gatées par la production de l'item qu'elles raccourcissent. Phase Hobby.
+  {
+    id: 'ms-steel-200',
+    itemId: 'steel',
+    target: 200,
+    unlocks: { type: 'recipe', id: 'alt-steel-cast' },
+    // 200 / 10 (Foundry : 1*60/6 = 10/min) = 20.0 min. Récompense la branche acier.
+    estimatedMinutesNominal: 20.0,
+  },
+  {
+    id: 'ms-circuit-board-75',
+    itemId: 'circuit-board',
+    target: 75,
+    unlocks: { type: 'recipe', id: 'alt-fused-circuit' },
+    // 75 / 7.5 (Assembler : 1*60/8 = 7.5/min) = 10.0 min. Récompense la branche électronique.
+    estimatedMinutesNominal: 10.0,
+  },
+  {
+    id: 'ms-motor-50',
+    itemId: 'motor',
+    target: 50,
+    unlocks: { type: 'recipe', id: 'alt-automated-motor' },
+    // 50 / 5 (Assembler : 1*60/12 = 5/min) = 10.0 min. Défi d'optimisation max (Hobby).
+    estimatedMinutesNominal: 10.0,
   },
 ];
 

@@ -170,11 +170,13 @@ describe('économie maison v1 — paliers 2/3', () => {
   });
 
   it('circuit-board : multi-branches (copper-sheet + plastic-rod), coal en brut', async () => {
+    // Chaîne STANDARD : les alts paliers 2/3 (gatées M11-M13) sont exclues.
     const r = await solveFactory({
       data: game,
       targetItem: 'circuit-board',
       targetRate: 7.5,
       objective: 'raw-resources',
+      allowedAlternates: [],
     });
     // 1/8s = 7.5/min → exactement 1 Assembler.
     expect(sel(r, 'circuit-board')?.machineCount).toBe(1);
@@ -186,11 +188,13 @@ describe('économie maison v1 — paliers 2/3', () => {
   });
 
   it('computer : ratio « élégant » 1 Manufacturer ↔ 1 Assembler circuit-board', async () => {
+    // Chaîne STANDARD : les alts paliers 2/3 (gatées M11-M13) sont exclues.
     const r = await solveFactory({
       data: game,
       targetItem: 'computer',
       targetRate: 2.5,
       objective: 'raw-resources',
+      allowedAlternates: [],
     });
     // 1/24s = 2.5/min → 1 Manufacturer ; il consomme 7.5/min de circuit-board = 1 Assembler pile.
     expect(sel(r, 'computer')?.machineCount).toBe(1);
@@ -198,15 +202,96 @@ describe('économie maison v1 — paliers 2/3', () => {
   });
 
   it('motor : convergence acier (P2) + plaque renforcée (P1)', async () => {
+    // Chaîne STANDARD : les alts paliers 2/3 (gatées M11-M13) sont exclues.
     const r = await solveFactory({
       data: game,
       targetItem: 'motor',
       targetRate: 5,
       objective: 'raw-resources',
+      allowedAlternates: [],
     });
     // 1/12s = 5/min → 1 Assembler ; relie les deux branches.
     expect(sel(r, 'motor')?.machineCount).toBe(1);
     expect(sel(r, 'steel')).toBeDefined();
     expect(sel(r, 'reinforced-iron-plate')).toBeDefined();
+  });
+});
+
+describe('économie maison v1 — alternatives paliers 2/3 (T5)', () => {
+  it('alt-steel-cast : min machines la choisit (1 Foundry au lieu de 3), min raw l’évite', async () => {
+    // Standard : 10 steel/min/Foundry → 30/min = 3 Foundries ; 4 bruts/steel (3 ore + 1 coal).
+    // Alt : 1*60/2 = 30 steel/min/Foundry → 1 Foundry + 1 Smelter, mais 5 bruts/steel
+    // (1 ore via lingot + 4 coal) → strictement pire en min raw. Arbitrage honnête.
+    const minMachines = await solveFactory({
+      data: game,
+      targetItem: 'steel',
+      targetRate: 30,
+      objective: 'machines',
+    });
+    expect(sel(minMachines, 'alt-steel-cast')).toBeDefined();
+    expect(sel(minMachines, 'alt-steel-cast')?.machineCount).toBe(1);
+
+    const minRaw = await solveFactory({
+      data: game,
+      targetItem: 'steel',
+      targetRate: 30,
+      objective: 'raw-resources',
+    });
+    // min raw garde la recette standard (3 ore + 1 coal directs, sans Smelter).
+    expect(sel(minRaw, 'steel')?.machineCount).toBe(3);
+    expect(sel(minRaw, 'alt-steel-cast')).toBeUndefined();
+  });
+
+  it('alt-fused-circuit : min raw la choisit (court-circuite copper-sheet)', async () => {
+    // Standard 7.5/min : 2 copper-sheet (= 4 copper-ingot = 4 copper-ore) + 4 plastic-rod par circuit.
+    // Alt 12/min : 4 copper-ingot (= 4 ore) + 2 plastic-rod pour 2 circuits → moitié moins
+    // de cuivre ET de plastic-rod par circuit : min raw-resources doit la préférer.
+    const minRaw = await solveFactory({
+      data: game,
+      targetItem: 'circuit-board',
+      targetRate: 12,
+      objective: 'raw-resources',
+    });
+    expect(sel(minRaw, 'alt-fused-circuit')).toBeDefined();
+    expect(sel(minRaw, 'circuit-board')).toBeUndefined();
+
+    // Sans l'alternative, la recette standard consomme strictement plus de brut.
+    const noAlt = await solveFactory({
+      data: game,
+      targetItem: 'circuit-board',
+      targetRate: 12,
+      objective: 'raw-resources',
+      allowedAlternates: [],
+    });
+    const rawTotal = (r: typeof minRaw) => r.rawInputs.reduce((s, f) => s + f.rate, 0);
+    expect(rawTotal(minRaw)).toBeLessThan(rawTotal(noAlt) - 1e-6);
+  });
+
+  it('alt-automated-motor : moins de machines, mais plus d’énergie (arbitrage honnête)', async () => {
+    const withAlt = await solveFactory({
+      data: game,
+      targetItem: 'motor',
+      targetRate: 12,
+      objective: 'machines',
+    });
+    const noAlt = await solveFactory({
+      data: game,
+      targetItem: 'motor',
+      targetRate: 12,
+      objective: 'machines',
+      allowedAlternates: [],
+    });
+    // L'alt doit réduire (ou au pire égaler) le nombre de machines — invariant LP.
+    expect(withAlt.totalMachines).toBeLessThanOrEqual(noAlt.totalMachines);
+
+    // Et l'optimum énergie n'utilise PAS l'alt (Manufacturer 55 MW vs Assembler 15 MW).
+    const minEnergy = await solveFactory({
+      data: game,
+      targetItem: 'motor',
+      targetRate: 12,
+      objective: 'energy',
+    });
+    expect(sel(minEnergy, 'alt-automated-motor')).toBeUndefined();
+    expect(sel(minEnergy, 'motor')).toBeDefined();
   });
 });

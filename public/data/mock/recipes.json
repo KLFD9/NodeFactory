@@ -216,5 +216,42 @@
     "producedIn": "constructor",
     "ingredients": [{ "item": "iron-ingot", "amountPerCycle": 5 }],
     "products": [{ "item": "wire", "amountPerCycle": 9 }]
+  },
+  {
+    "id": "alt-steel-cast",
+    "name": "Alternate: Steel Cast",
+    "alternate": true,
+    "time": 2,
+    "producedIn": "foundry",
+    "ingredients": [
+      { "item": "iron-ingot", "amountPerCycle": 1 },
+      { "item": "coal", "amountPerCycle": 4 }
+    ],
+    "products": [{ "item": "steel", "amountPerCycle": 1 }]
+  },
+  {
+    "id": "alt-fused-circuit",
+    "name": "Alternate: Fused Circuit",
+    "alternate": true,
+    "time": 10,
+    "producedIn": "assembler",
+    "ingredients": [
+      { "item": "copper-ingot", "amountPerCycle": 4 },
+      { "item": "plastic-rod", "amountPerCycle": 2 }
+    ],
+    "products": [{ "item": "circuit-board", "amountPerCycle": 2 }]
+  },
+  {
+    "id": "alt-automated-motor",
+    "name": "Alternate: Automated Motor",
+    "alternate": true,
+    "time": 30,
+    "producedIn": "manufacturer",
+    "ingredients": [
+      { "item": "steel", "amountPerCycle": 2 },
+      { "item": "cable", "amountPerCycle": 4 },
+      { "item": "circuit-board", "amountPerCycle": 2 }
+    ],
+    "products": [{ "item": "motor", "amountPerCycle": 2 }]
   }
 ]

@@ -247,8 +247,8 @@ describe('Cohérence des courbes', () => {
 // ---------------------------------------------------------------------------
 
 describe('Table MILESTONES', () => {
-  it('10 milestones définis', () => {
-    expect(MILESTONES).toHaveLength(10);
+  it('13 milestones définis', () => {
+    expect(MILESTONES).toHaveLength(13);
   });
 
   it('tous les milestones ont un id unique', () => {
@@ -387,6 +387,36 @@ describe('Table MILESTONES', () => {
     expect(expectedMin).toBeCloseTo(75.0, 5);
   });
 
+  it('M11 : steel, target=200, 20 min nominales, débloque alt-steel-cast (Hobby)', () => {
+    const m = MILESTONES[10];
+    expect(m.itemId).toBe('steel');
+    expect(m.target).toBe(200);
+    expect(m.estimatedMinutesNominal).toBeCloseTo(20.0, 1);
+    // 200 / 10 (Foundry : 1*60/6 = 10/min) = 20.0 min ✓
+    expect(m.unlocks.type).toBe('recipe');
+    expect(m.unlocks.id).toBe('alt-steel-cast');
+  });
+
+  it('M12 : circuit-board, target=75, 10 min nominales, débloque alt-fused-circuit', () => {
+    const m = MILESTONES[11];
+    expect(m.itemId).toBe('circuit-board');
+    expect(m.target).toBe(75);
+    expect(m.estimatedMinutesNominal).toBeCloseTo(10.0, 1);
+    // 75 / 7.5 (Assembler : 1*60/8 = 7.5/min) = 10.0 min ✓
+    expect(m.unlocks.type).toBe('recipe');
+    expect(m.unlocks.id).toBe('alt-fused-circuit');
+  });
+
+  it('M13 : motor, target=50, 10 min nominales, débloque alt-automated-motor', () => {
+    const m = MILESTONES[12];
+    expect(m.itemId).toBe('motor');
+    expect(m.target).toBe(50);
+    expect(m.estimatedMinutesNominal).toBeCloseTo(10.0, 1);
+    // 50 / 5 (Assembler : 1*60/12 = 5/min) = 10.0 min ✓
+    expect(m.unlocks.type).toBe('recipe');
+    expect(m.unlocks.id).toBe('alt-automated-motor');
+  });
+
   it('tous les estimatedMinutesNominal sont corrects par rapport à la physique du dataset', () => {
     // Débits nominaux (1 machine) issus du dataset :
     const ratePerMin: Record<string, number> = {
@@ -399,6 +429,9 @@ describe('Table MILESTONES', () => {
       'cable': 30,          // Constructor : 1*60/2 = 30/min
       'concrete': 15,       // Constructor : 1*60/4 = 15/min
       'modular-frame': 2,   // Assembler : 2*60/60 = 2/min
+      'steel': 10,          // Foundry : 1*60/6 = 10/min
+      'circuit-board': 7.5, // Assembler : 1*60/8 = 7.5/min
+      'motor': 5,           // Assembler : 1*60/12 = 5/min
     };
     for (const m of MILESTONES) {
       const rate = ratePerMin[m.itemId];
