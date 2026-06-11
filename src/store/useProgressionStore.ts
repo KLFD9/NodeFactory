@@ -8,7 +8,15 @@ import {
   type ProgressionState,
   type TickInput,
 } from '@/game/progression';
-import type { MilestoneDefinition } from '@/game/balance';
+import { shouldShowOfflineRecap, type MilestoneDefinition } from '@/game/balance';
+
+/** Récapitulatif des gains hors-ligne, en attente d'affichage (transitoire). */
+export interface OfflineRecap {
+  /** AP crédités pour la période hors-ligne (déjà plafonnés à 4 h). */
+  apGained: number;
+  /** Durée hors-ligne créditée, en minutes (≤ plafond 240). */
+  minutesCredited: number;
+}
 
 /**
  * useProgressionStore — état de jeu (progression) de NodeFactory.
@@ -24,6 +32,8 @@ import type { MilestoneDefinition } from '@/game/balance';
 interface ProgressionStore extends ProgressionState {
   /** Milestones franchis récemment, en attente d'affichage (transitoire, non persisté). */
   recentUnlocks: MilestoneDefinition[];
+  /** Récap offline à afficher à la reconnexion (null = rien à montrer ; non persisté). */
+  offlineRecap: OfflineRecap | null;
 
   /** Avance la progression d'un tick depuis l'usine live. */
   tick: (input: TickInput) => void;
@@ -31,6 +41,8 @@ interface ProgressionStore extends ProgressionState {
   applyOffline: (nowMs?: number) => number;
   /** Vide la file des déblocages récents (après affichage de la notification). */
   dismissUnlocks: () => void;
+  /** Ferme la popup récap offline. */
+  dismissOfflineRecap: () => void;
   /** Tente de dépenser `cost` AP (coût de pose). Renvoie true si débité, false si solde insuffisant. */
   spendAP: (cost: number) => boolean;
   /** Réinitialise toute la progression (debug / futur prestige). */
@@ -42,6 +54,7 @@ export const useProgressionStore = create<ProgressionStore>()(
     (set, get) => ({
       ...initialProgression(),
       recentUnlocks: [],
+      offlineRecap: null,
 
       tick: (input) =>
         set((state) => {
@@ -56,12 +69,21 @@ export const useProgressionStore = create<ProgressionStore>()(
         }),
 
       applyOffline: (nowMs = Date.now()) => {
-        const { state: next, apGained } = applyOfflineGains(get(), nowMs);
-        set(next);
+        const { state: next, apGained, minutesCredited } = applyOfflineGains(get(), nowMs);
+        set({
+          ...next,
+          // Récap visible seulement si l'absence vaut la peine d'être racontée
+          // (jamais de modale pour un simple reload de quelques secondes).
+          offlineRecap: shouldShowOfflineRecap(apGained, minutesCredited)
+            ? { apGained, minutesCredited }
+            : get().offlineRecap,
+        });
         return apGained;
       },
 
       dismissUnlocks: () => set({ recentUnlocks: [] }),
+
+      dismissOfflineRecap: () => set({ offlineRecap: null }),
 
       spendAP: (cost) => {
         const { state: next, spent } = trySpendAP(get(), cost);
@@ -69,7 +91,7 @@ export const useProgressionStore = create<ProgressionStore>()(
         return spent;
       },
 
-      reset: () => set({ ...initialProgression(), recentUnlocks: [] }),
+      reset: () => set({ ...initialProgression(), recentUnlocks: [], offlineRecap: null }),
     }),
     {
       name: 'nf-progression',

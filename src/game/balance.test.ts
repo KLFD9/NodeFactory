@@ -18,6 +18,9 @@ import {
   LONG_CLOCK_CAP_MIN,
   LONG_CLOCK_CAP_MS,
   computeOfflineGains,
+  OFFLINE_RECAP_MIN_MINUTES,
+  OFFLINE_RECAP_MIN_AP,
+  shouldShowOfflineRecap,
   // Courbes idle
   UPGRADE_COST_RATIO,
   UPGRADE_PROD_RATIO,
@@ -134,6 +137,30 @@ describe('computeOfflineGains', () => {
 
   it('1 minute écoulée, 10 AP/min → 10 AP', () => {
     expect(computeOfflineGains(10, 0, 60_000)).toBeCloseTo(10, 5);
+  });
+});
+
+describe('shouldShowOfflineRecap', () => {
+  it('seuils : 1 min / 1 AP', () => {
+    expect(OFFLINE_RECAP_MIN_MINUTES).toBe(1);
+    expect(OFFLINE_RECAP_MIN_AP).toBe(1);
+  });
+
+  it('reload rapide (10 s, 1.6 AP) → pas de popup', () => {
+    // 10 s = 0.167 min < 1 min, même si les AP suffisent.
+    expect(shouldShowOfflineRecap(1.6, 10 / 60)).toBe(false);
+  });
+
+  it('absence longue mais usine à l’arrêt (0 AP) → pas de popup', () => {
+    expect(shouldShowOfflineRecap(0, 120)).toBe(false);
+  });
+
+  it('5 min d’absence à 10 AP/min (50 AP) → popup', () => {
+    expect(shouldShowOfflineRecap(50, 5)).toBe(true);
+  });
+
+  it('exactement aux seuils (1 AP, 1 min) → popup', () => {
+    expect(shouldShowOfflineRecap(1, 1)).toBe(true);
   });
 });
 

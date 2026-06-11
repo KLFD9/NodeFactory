@@ -12,6 +12,7 @@ import { Inspector } from './Inspector';
 import { FactorySummaryPanel } from './FactorySummaryPanel';
 import { UnlockToast } from './UnlockToast';
 import { PlacementDeniedToast } from './PlacementDeniedToast';
+import { OfflineRecapModal } from './OfflineRecapModal';
 import { useProgressionTick } from './useProgressionTick';
 import { ReactFlowProvider } from '@xyflow/react';
 
@@ -166,6 +167,7 @@ export function App() {
         <StatusBar />
         <UnlockToast />
         <PlacementDeniedToast />
+        <OfflineRecapModal />
       </div>
     </ReactFlowProvider>
   );

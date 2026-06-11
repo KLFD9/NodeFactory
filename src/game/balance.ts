@@ -89,6 +89,25 @@ export function computeOfflineGains(
   return apPerMin * elapsedMin;
 }
 
+/**
+ * Seuils d'affichage de la popup récap offline à la reconnexion.
+ * En-dessous, on crédite silencieusement : un simple reload d'onglet (quelques
+ * secondes) ne doit JAMAIS interrompre le joueur avec une modale.
+ * [À VALIDER : 1 min / 1 AP — volontairement bas, la popup est une récompense.]
+ */
+export const OFFLINE_RECAP_MIN_MINUTES = 1;
+export const OFFLINE_RECAP_MIN_AP = 1;
+
+/**
+ * La popup récap offline doit-elle être affichée pour ces gains ?
+ *
+ * @param apGained         AP crédités pour la période hors-ligne.
+ * @param minutesCredited  Durée hors-ligne créditée (déjà plafonnée), en minutes.
+ */
+export function shouldShowOfflineRecap(apGained: number, minutesCredited: number): boolean {
+  return apGained >= OFFLINE_RECAP_MIN_AP && minutesCredited >= OFFLINE_RECAP_MIN_MINUTES;
+}
+
 // ---------------------------------------------------------------------------
 // 3. COURBES IDLE
 //    coût(N)  = baseCost × COST_RATIO^N  (×1.15/niveau — pacing contrôlé)
