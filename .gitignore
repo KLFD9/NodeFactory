@@ -27,3 +27,8 @@ coverage
 
 # TS build info
 *.tsbuildinfo
+
+# Playwright
+test-results
+playwright-report
+blob-report
