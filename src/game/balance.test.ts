@@ -27,6 +27,8 @@ import {
   upgradeCost,
   upgradeProduction,
   AP_GENERATOR_BASE_COST,
+  MACHINE_UPGRADE_COST_RATIO,
+  machineUpgradeCost,
   // Milestones
   MILESTONES,
   isMilestoneReached,
@@ -266,6 +268,32 @@ describe('Cohérence des courbes', () => {
       const ratio = upgradeProduction(base, n + 1) / upgradeProduction(base, n);
       expect(ratio).toBeCloseTo(1.1, 5);
     }
+  });
+});
+
+describe('machineUpgradeCost (améliorations par machine, Bolts)', () => {
+  it('Smelter (pose 10) : 25 → 40 → 64', () => {
+    expect(machineUpgradeCost('smelter', 0)).toBe(25);
+    expect(machineUpgradeCost('smelter', 1)).toBe(40);
+    expect(machineUpgradeCost('smelter', 2)).toBe(64);
+  });
+
+  it('Manufacturer (pose 500) : 1250 → 2000 → 3200', () => {
+    expect(machineUpgradeCost('manufacturer', 0)).toBe(1250);
+    expect(machineUpgradeCost('manufacturer', 1)).toBe(2000);
+    expect(machineUpgradeCost('manufacturer', 2)).toBe(3200);
+  });
+
+  it('chaque niveau coûte ×1.6 le précédent', () => {
+    for (let n = 0; n < 3; n++) {
+      const ratio = machineUpgradeCost('constructor', n + 1) / machineUpgradeCost('constructor', n);
+      expect(ratio).toBeCloseTo(MACHINE_UPGRADE_COST_RATIO, 1);
+    }
+  });
+
+  it('bâtiment sans coût de pose ou niveau négatif → 0', () => {
+    expect(machineUpgradeCost('ghost-building', 0)).toBe(0);
+    expect(machineUpgradeCost('smelter', -1)).toBe(0);
   });
 });
 

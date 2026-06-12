@@ -13,7 +13,8 @@ import {
 } from '@xyflow/react';
 import type { GameData, Purity } from '@/data/types';
 import { reconcileEdgesForNode } from '@/graph/connection';
-import { BUILDING_COSTS } from '@/game/balance';
+import { BUILDING_COSTS, machineUpgradeCost } from '@/game/balance';
+import { MACHINE_UPGRADE_MAX_LEVEL } from '@/graph/nodeInfo';
 import { useProgressionStore } from '@/store/useProgressionStore';
 import { useFactoryStore } from '@/store/useFactoryStore';
 
@@ -38,6 +39,8 @@ export interface MachineNodeData extends Record<string, unknown> {
   portsOut?: number;
   /** Rotation du bâtiment en degrés (0, 90, 180, 270). */
   rotation?: number;
+  /** Niveau d'amélioration de CETTE machine (0 = base, cap MACHINE_UPGRADE_MAX_LEVEL). */
+  upgradeLevel?: number;
 }
 
 export type MachineNode = Node<MachineNodeData, 'machine'>;
@@ -92,6 +95,11 @@ interface GraphState {
     sourceId: string,
     suggestion: { buildingId: string; recipeId: string; itemId: string },
   ) => void;
+  /**
+   * Améliore une machine d'un niveau (+10 % cadence, MW qui suivent). Débite le coût
+   * en Bolts (machineUpgradeCost) ; refuse au cap ou si le solde est insuffisant.
+   */
+  upgradeNode: (id: string) => void;
   /** Pose un nouveau node de bâtiment et divise éventuellement une arête existante. */
   dropBuildingNode: (buildingId: string, position: XYPosition, category: string, splitEdgeId?: string | null) => void;
   /**
@@ -181,6 +189,30 @@ export const useGraphStore = create<GraphState>()(
         data: initialNodeData(buildingId, category),
       };
       return { nodes: [...state.nodes, node], selectedNodeId: id };
+    }),
+
+  upgradeNode: (id) =>
+    set((state) => {
+      const node = state.nodes.find((n) => n.id === id);
+      if (!node) return {};
+      const level = node.data.upgradeLevel ?? 0;
+      if (level >= MACHINE_UPGRADE_MAX_LEVEL) return {};
+      const cost = machineUpgradeCost(node.data.buildingId, level);
+      if (cost <= 0) return {};
+      if (!useProgressionStore.getState().spendBolts(cost)) {
+        return {
+          placementDenied: {
+            buildingId: node.data.buildingId,
+            cost,
+            available: useProgressionStore.getState().bolts,
+          },
+        };
+      }
+      return {
+        nodes: state.nodes.map((n) =>
+          n.id === id ? { ...n, data: { ...n.data, upgradeLevel: level + 1 } } : n,
+        ),
+      };
     }),
 
   addDownstreamNode: (sourceId, { buildingId, recipeId, itemId }) =>

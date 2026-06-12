@@ -5,7 +5,9 @@ import type { Building } from '@/data/types';
 import { useFactoryStore } from '@/store/useFactoryStore';
 import { useGraphStore } from '@/store/useGraphStore';
 import type { MachineNode as MachineNodeType, MachineNodeData } from '@/store/useGraphStore';
-import { computeNodeInfo } from '@/graph/nodeInfo';
+import { computeNodeInfo, MACHINE_UPGRADE_MAX_LEVEL } from '@/graph/nodeInfo';
+import { machineUpgradeCost } from '@/game/balance';
+import { useProgressionStore } from '@/store/useProgressionStore';
 import { computeMachineStatus, type MachineState } from '@/graph/machineStatus';
 import { ExtractionIcon, SmeltingIcon, ManufacturingIcon, LogisticsIcon, PowerIcon } from '@/ui/icons';
 import { ItemIcon } from '@/ui/assets';
@@ -167,6 +169,48 @@ function genericPorts(building: Building, data: MachineNodeData, side: 'inputs' 
 const HANDLE_IN = 'nf-handle-style !bg-orange-500 !border-zinc-950';
 const HANDLE_OUT = 'nf-handle-style !bg-emerald-500 !border-zinc-950';
 
+/** Rangs affichés par niveau d'amélioration (0 = base, pas de badge). */
+export const UPGRADE_RANK_LABEL = ['', 'MK.II', 'MK.III', 'MK.IV'];
+
+/**
+ * Bouton « AMÉLIORER » sous la machine (design progression v2) : +10 % de cadence
+ * par niveau, payé en Bolts — la demande électrique suit, le réseau doit tenir.
+ */
+function UpgradeAction({ id, data, category }: { id: string; data: MachineNodeData; category: string }) {
+  const upgradeNode = useGraphStore((s) => s.upgradeNode);
+  const bolts = useProgressionStore((s) => s.bolts);
+  if (category === 'logistics' || category === 'power') return null;
+
+  const level = data.upgradeLevel ?? 0;
+  if (level >= MACHINE_UPGRADE_MAX_LEVEL) return null;
+  const cost = machineUpgradeCost(data.buildingId, level);
+  if (cost <= 0) return null;
+  const affordable = bolts >= cost;
+
+  return (
+    <NodeToolbar position={Position.Bottom} className="pt-2">
+      <button
+        type="button"
+        disabled={!affordable}
+        onClick={() => upgradeNode(id)}
+        title={
+          affordable
+            ? `+10 % de cadence (la consommation électrique suit) → ${UPGRADE_RANK_LABEL[level + 1]}`
+            : `Nécessite ${cost} Bolts (solde : ${Math.floor(bolts)})`
+        }
+        data-testid="upgrade-node"
+        className="flex items-center gap-1.5 rounded-lg border border-amber-600/50 bg-zinc-950/90 px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-amber-300 shadow-[0_4px_16px_rgba(0,0,0,0.6)] backdrop-blur-sm transition-all hover:border-amber-400 hover:bg-amber-500/10 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        AMÉLIORER · {cost}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-2.5 w-2.5">
+          <path d="M12 2 20.66 7v10L12 22 3.34 17V7L12 2Z" />
+          <circle cx="12" cy="12" r="3.5" />
+        </svg>
+      </button>
+    </NodeToolbar>
+  );
+}
+
 /** Barre d'outils contextuelle unifiée sous forme de capsule HUD vitrée. */
 function NodeActions({ id, data }: { id: string; data: MachineNodeData }) {
   const duplicate = useGraphStore((s) => s.duplicateSelection);
@@ -179,7 +223,11 @@ function NodeActions({ id, data }: { id: string; data: MachineNodeData }) {
     updateNodeData(id, { rotation: nextRot }, gameData || undefined);
   };
 
+  const category = gameData?.buildings.find((b) => b.id === data.buildingId)?.category ?? '';
+
   return (
+    <>
+    <UpgradeAction id={id} data={data} category={category} />
     <NodeToolbar position={Position.Top} className="pb-2">
       <div className="flex items-center gap-1.5 p-1 rounded-xl bg-zinc-950/90 border border-zinc-800/80 shadow-[0_4px_16px_rgba(0,0,0,0.6)] backdrop-blur-sm">
         {/* Bouton de rotation (Glow ambre) */}
@@ -247,6 +295,7 @@ function NodeActions({ id, data }: { id: string; data: MachineNodeData }) {
         </button>
       </div>
     </NodeToolbar>
+    </>
   );
 }
 
@@ -1069,6 +1118,15 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
             </span>
           )}
           <span className="font-extrabold tracking-tight text-zinc-100 text-[13px] truncate max-w-[100px]">{building?.name ?? data.buildingId}</span>
+          {(data.upgradeLevel ?? 0) > 0 && (
+            <span
+              className="rounded border border-amber-500/40 bg-amber-500/10 px-1 py-0.5 font-mono text-[8px] font-black tracking-wider text-amber-300"
+              title={`Machine améliorée : cadence ×${Math.pow(1.1, data.upgradeLevel ?? 0).toFixed(2)}`}
+              data-testid="upgrade-rank"
+            >
+              {UPGRADE_RANK_LABEL[data.upgradeLevel ?? 0]}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
           {/* Compass direction badge showing facing angle */}

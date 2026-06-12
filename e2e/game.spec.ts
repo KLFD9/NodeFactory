@@ -272,6 +272,25 @@ test.describe('Pose de bâtiments (coût AP)', () => {
   });
 });
 
+test.describe('Améliorations par machine (Bolts)', () => {
+  test('bouton « AMÉLIORER » sous le node : Bolts débités, badge MK.II', async ({ page }) => {
+    await seedWorld(page);
+    await seedProgression(page);
+    await gotoReady(page);
+
+    // Pose un mineur via le pin (10 Bolts → solde 40), puis le sélectionne
+    // (le NodeToolbar « AMÉLIORER » n'apparaît que sur le node sélectionné).
+    await page.locator('button[title*="Coal"]').first().click();
+    await expect(page.locator('.react-flow__node')).toHaveCount(1);
+    await page.locator('.react-flow__node').click();
+
+    // Améliore (25 Bolts) → rang MK.II affiché, solde 40 − 25 = 15.
+    await page.getByTestId('upgrade-node').click();
+    await expect(page.getByTestId('upgrade-rank')).toHaveText('MK.II');
+    await expect(page.getByTestId('bolts-balance')).toHaveText('15');
+  });
+});
+
 test.describe('Migration des sauvegardes', () => {
   test('save v1 (AP) → v2 : les AP deviennent des RP, capital de Bolts crédité', async ({ page }) => {
     // Ancien schéma : une seule monnaie `automationPoints`.

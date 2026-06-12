@@ -16,6 +16,7 @@ import type { Edge } from '@xyflow/react';
 import type { GameData } from '@/data/types';
 import { ratePerMinute } from '@/data/types';
 import type { MachineNode } from '@/store/useGraphStore';
+import { machineSpeedMult } from './nodeInfo';
 
 const EPS = 0.001;
 const round = (n: number) => Math.round(n * 1000) / 1000;
@@ -150,7 +151,9 @@ export function computePowerNetworks(
         const fed = fedByNode?.get(id) ?? true;
         totalGenMW += fed ? building.powerMW * count : 0;
       } else {
-        totalDemandMW += building.powerMW * count;
+        // Une machine améliorée (cadence +10 %/niveau) tire proportionnellement plus
+        // de courant — la demande du réseau suit le niveau d'amélioration.
+        totalDemandMW += building.powerMW * count * machineSpeedMult(node.data.upgradeLevel ?? 0);
       }
     }
     const powered = totalDemandMW <= totalGenMW + EPS;

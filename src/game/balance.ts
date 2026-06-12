@@ -268,6 +268,28 @@ export const BUILDING_COSTS: Record<string, number> = {
 };
 
 // ---------------------------------------------------------------------------
+// 3ter. AMÉLIORATIONS PAR MACHINE (Bolts) — design progression v2
+//    coût(type, N) = 2.5 × coût_de_pose × 1.6^N  (ratio agressif : l'amélioration
+//    est PAR NODE — un ratio doux inciterait à tout maxer sans réfléchir).
+//    L'effet (+10 % cadence/niveau, MW qui suivent) vit dans src/graph/nodeInfo.ts
+//    (machineSpeedMult) : c'est de la physique d'usine, le jeu n'en fixe que le prix.
+// ---------------------------------------------------------------------------
+
+export const MACHINE_UPGRADE_COST_RATIO = 1.6;
+export const MACHINE_UPGRADE_COST_BASE_MULT = 2.5;
+
+/**
+ * Coût en Bolts du passage du niveau `level` au niveau `level + 1` pour une machine
+ * du bâtiment donné. 0 si le bâtiment n'a pas de coût de pose (rien à améliorer).
+ * Ex. Smelter (pose 10) : 25 → 40 → 64. Manufacturer (pose 500) : 1250 → 2000 → 3200.
+ */
+export function machineUpgradeCost(buildingId: string, level: number): number {
+  const base = BUILDING_COSTS[buildingId] ?? 0;
+  if (base <= 0 || level < 0) return 0;
+  return Math.round(MACHINE_UPGRADE_COST_BASE_MULT * base * Math.pow(MACHINE_UPGRADE_COST_RATIO, level));
+}
+
+// ---------------------------------------------------------------------------
 // 4. MILESTONES DE PRODUCTION — 10 paliers
 //    Conçus pour le FEEL : Hook rapide, deux gates de capacité (Miner Mk.2 / Mk.3),
 //    interleave bâtiments / recettes-alternatives.
