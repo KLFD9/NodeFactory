@@ -46,6 +46,43 @@ const TIER_COLOR: Record<number, string> = {
   6: '#fb923c',
 };
 
+function OverviewIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={props.className}
+      {...props}
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="m16.2 7.8-2 4.2-4.2 2-2 4.2 4.2-2 2-4.2 2-2Z" />
+    </svg>
+  );
+}
+
+function MapIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={props.className}
+      {...props}
+    >
+      <path d="M14.106 5.553a2 2 0 0 0-1.788 0l-3.659 1.83a1 1 0 0 1-.894 0L4 5.5V17a1 1 0 0 0 1 1h.106a2 2 0 0 1 1.788 0l3.659-1.83a1 1 0 0 0 .894 0l3.659 1.83a2 2 0 0 0 1.788 0L20 17.1V5.6a1 1 0 0 0-1-1h-.106a2 2 0 0 0-1.788 0l-3-1.5a1.5 1.5 0 0 1-3.659 0Z" />
+      <path d="M15 5.75v12.5" />
+      <path d="M9 5.75v12.5" />
+    </svg>
+  );
+}
+
 function Flow() {
   const gameData = useFactoryStore((s) => s.gameData);
   const nodes = useGraphStore((s) => s.nodes);
@@ -238,7 +275,13 @@ function Flow() {
   );
 
   const onSelectionChange = useCallback(
-    ({ nodes: sel }: OnSelectionChangeParams) => selectNode(sel[0]?.id ?? null),
+    ({ nodes: sel }: OnSelectionChangeParams) => {
+      if (sel.length > 1) {
+        useGraphStore.setState({ selectedNodeId: sel[sel.length - 1]?.id ?? null });
+      } else {
+        selectNode(sel[0]?.id ?? null);
+      }
+    },
     [selectNode],
   );
 
@@ -356,7 +399,8 @@ function Flow() {
         isValidConnection={isValidConnection}
         connectionLineType={ConnectionLineType.SmoothStep}
         selectionOnDrag={true}
-        panOnDrag={[1, 2]}
+        selectionMode="partial"
+        panOnDrag={[2]}
         snapToGrid={true}
         snapGrid={[16, 16]}
         defaultEdgeOptions={{
@@ -370,22 +414,30 @@ function Flow() {
         <ViewportPortal>
           <ResourceLayer />
         </ViewportPortal>
-        <Panel position="top-right" className="flex gap-1.5">
+        <Panel position="top-right" className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950/80 p-1.5 shadow-2xl backdrop-blur-md nf-glow-box-orange">
+          {/* Lignes d'accent HUD industrielles */}
+          <div className="nf-hud-corner nf-hud-corner-tl" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.4)', width: '4px', height: '4px' } as React.CSSProperties} />
+          <div className="nf-hud-corner nf-hud-corner-tr" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.4)', width: '4px', height: '4px' } as React.CSSProperties} />
+          <div className="nf-hud-corner nf-hud-corner-bl" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.4)', width: '4px', height: '4px' } as React.CSSProperties} />
+          <div className="nf-hud-corner nf-hud-corner-br" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.4)', width: '4px', height: '4px' } as React.CSSProperties} />
+
           <button
             type="button"
             onClick={onOverview}
             title="Cadrer tous les gisements et l'usine"
-            className="rounded-md border border-zinc-700 bg-zinc-900/90 px-2.5 py-1.5 text-xs font-medium text-zinc-200 shadow-md hover:border-sky-500 hover:text-sky-300 transition-colors"
+            className="flex items-center gap-1.5 rounded border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-800/80 px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase font-mono text-zinc-300 hover:text-orange-400 hover:border-orange-500/40 transition-all cursor-pointer"
           >
-            🧭 Vue d'ensemble
+            <OverviewIcon className="h-3.5 w-3.5" />
+            Vue d'ensemble
           </button>
           <button
             type="button"
             onClick={onRegenerate}
             title="Génère une nouvelle disposition de gisements (détache les mineurs)"
-            className="rounded-md border border-zinc-700 bg-zinc-900/90 px-2.5 py-1.5 text-xs font-medium text-zinc-200 shadow-md hover:border-amber-500 hover:text-amber-300 transition-colors"
+            className="flex items-center gap-1.5 rounded border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-800/80 px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase font-mono text-zinc-300 hover:text-orange-400 hover:border-orange-500/40 transition-all cursor-pointer"
           >
-            🗺 Nouvelle carte
+            <MapIcon className="h-3.5 w-3.5" />
+            Nouvelle carte
           </button>
         </Panel>
         <Background />

@@ -9,7 +9,7 @@
 import type { Edge } from '@xyflow/react';
 import type { GameData } from '@/data/types';
 import type { MachineNode, MachineNodeData } from '@/store/useGraphStore';
-import { computeFactory } from './computeFactory';
+import { computeFactory, type FactorySummary } from './computeFactory';
 import { computeNodeInfo } from './nodeInfo';
 
 /** Flux réellement mesuré sur les arêtes connectées à un node. */
@@ -34,6 +34,11 @@ export function buildNodeFlowMap(
   poweredOverride?: Map<string, boolean>,
 ): NodeFlowMap {
   const summary = computeFactory(nodes, edges, game, poweredOverride);
+  return buildNodeFlowMapFromSummary(edges, summary);
+}
+
+/** Variante de `buildNodeFlowMap` à partir d'un `FactorySummary` déjà calculé (évite un recalcul). */
+export function buildNodeFlowMapFromSummary(edges: Edge[], summary: FactorySummary): NodeFlowMap {
   const plans = new Map(summary.edges.map((p) => [p.edgeId, p]));
   const map: NodeFlowMap = new Map();
   const getFlow = (id: string): NodeActualFlow => {

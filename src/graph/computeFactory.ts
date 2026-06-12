@@ -2,7 +2,13 @@ import type { Edge } from '@xyflow/react';
 import type { Belt, GameData } from '@/data/types';
 import type { MachineNode } from '@/store/useGraphStore';
 import { computeNodeInfo } from './nodeInfo';
-import { computePowerNetworks, isPowerSourceHandle, isPowerTargetHandle } from './power';
+import {
+  computePowerNetworks,
+  generatorFuelRequirement,
+  isPowerSourceHandle,
+  isPowerTargetHandle,
+  type PowerNetwork,
+} from './power';
 
 /** Plan de convoyage pour un débit donné. */
 export interface BeltPlan {
@@ -56,7 +62,10 @@ export interface EdgePlan {
   edgeId: string;
   itemId: string | null;
   itemName: string | null;
+  /** Débit effectivement transporté (plafonné à la capacité du meilleur convoyeur disponible). */
   ratePerMin: number;
+  /** Débit théorique demandé (avant plafonnement) — sert au dimensionnement du convoyeur. */
+  demandPerMin: number;
   belt: BeltPlan;
 }
 
@@ -109,9 +118,80 @@ export function computeFactory(
   game: GameData,
   poweredOverride?: Map<string, boolean>,
 ): FactorySummary {
+  if (poweredOverride) return runPass(nodes, edges, game, poweredOverride);
+  return computeFactoryAndPower(nodes, edges, game).summary;
+}
+
+export interface FactoryAndPower {
+  summary: FactorySummary;
+  networks: PowerNetwork[];
+  poweredByNode: Map<string, boolean>;
+}
+
+/**
+ * Calcule le bilan ET les réseaux électriques en une seule passe cohérente, en tenant compte
+ * du combustible des générateurs (« pas de charbon, pas de courant »).
+ *
+ * Le combustible d'un générateur dépend du flux de matière, qui dépend lui-même de l'état
+ * d'alimentation des machines amont (le mineur de charbon a besoin de courant pour tourner) :
+ * deux passes suffisent (pas de boucle énergie→fuel→énergie autorisée) :
+ *  1. Réseaux + bilan en supposant tous les générateurs nourris (comportement historique) →
+ *     donne le flux de combustible réel vers chaque générateur.
+ *  2. À partir de ce flux, détermine quels générateurs sont effectivement nourris, recalcule
+ *     les réseaux (générateur non nourri = 0 MW généré) puis le bilan final.
+ */
+export function computeFactoryAndPower(nodes: MachineNode[], edges: Edge[], game: GameData): FactoryAndPower {
+  const pass1Powered = computePowerNetworks(nodes, edges, game).poweredByNode;
+  const pass1 = runPass(nodes, edges, game, pass1Powered);
+
+  const fedByNode = computeFedByNode(nodes, edges, game, pass1);
+  const { networks, poweredByNode } = computePowerNetworks(nodes, edges, game, fedByNode);
+  const summary = runPass(nodes, edges, game, poweredByNode, fedByNode);
+
+  return { summary, networks, poweredByNode };
+}
+
+const FUEL_EPS = 0.01;
+
+/** Pour chaque générateur consommant un combustible, est-il nourri par le flux réel (passe 1) ? */
+function computeFedByNode(
+  nodes: MachineNode[],
+  edges: Edge[],
+  game: GameData,
+  pass1: FactorySummary,
+): Map<string, boolean> {
+  const fed = new Map<string, boolean>();
+  const plans = new Map(pass1.edges.map((p) => [p.edgeId, p]));
+  for (const node of nodes) {
+    const building = game.buildings.find((b) => b.id === node.data.buildingId);
+    if (!building || building.category !== 'power') continue;
+    const req = generatorFuelRequirement(building.id, game);
+    if (!req) {
+      fed.set(node.id, true);
+      continue;
+    }
+    const count = Math.max(1, node.data.count ?? 1);
+    const required = req.ratePerMin * count;
+    const targetHandle = `in-${req.itemId}`;
+    let incoming = 0;
+    for (const e of edges) {
+      if (e.target !== node.id || e.targetHandle !== targetHandle) continue;
+      incoming += plans.get(e.id)?.ratePerMin ?? 0;
+    }
+    fed.set(node.id, incoming >= required - FUEL_EPS);
+  }
+  return fed;
+}
+
+function runPass(
+  nodes: MachineNode[],
+  edges: Edge[],
+  game: GameData,
+  powered: Map<string, boolean>,
+  fedByNode?: Map<string, boolean>,
+): FactorySummary {
   const itemName = (id: string) => game.items.find((i) => i.id === id)?.name ?? id;
   const isRaw = (id: string) => game.items.find((i) => i.id === id)?.raw ?? false;
-  const powered = poweredOverride ?? computePowerNetworks(nodes, edges, game).poweredByNode;
 
   const production = new Map<string, number>();
   const consumption = new Map<string, number>();
@@ -131,8 +211,12 @@ export function computeFactory(
     const count = Math.max(1, node.data.count ?? 1);
 
     if (info.configured) {
-      // Hors tension : la machine existe mais ne tourne pas (zéro flux, zéro conso).
-      if (powered.get(node.id) === false && info.building.category !== 'power') {
+      if (info.building.category === 'power') {
+        // Pas de combustible, pas de courant : un générateur non nourri ne produit rien
+        // (ni MW, ni la sortie virtuelle « electricity ») et ne consomme pas son fuel.
+        if ((fedByNode?.get(node.id) ?? true) === false) continue;
+      } else if (powered.get(node.id) === false) {
+        // Hors tension : la machine existe mais ne tourne pas (zéro flux, zéro conso).
         unpoweredMachines += count;
         continue;
       }
@@ -172,42 +256,48 @@ export function computeFactory(
     (inc.get(e.target) ?? inc.set(e.target, []).get(e.target)!).push(e);
   }
 
-  const edgeFlow = new Map<string, { itemId: string | null; rate: number }>();
+  // Capacité du meilleur convoyeur disponible : un flux qui la dépasse est plafonné
+  // (le surplus n'est ni transporté ni propagé en aval — surcharge réelle).
+  const maxBeltCapacity =
+    game.belts.length > 0 ? Math.max(...game.belts.map((b) => b.capacityPerMin)) : Infinity;
+
+  const edgeFlow = new Map<string, { itemId: string | null; rate: number; demand: number }>();
   const resolving = new Set<string>();
   const isPowerEdge = (e: Edge) => isPowerSourceHandle(e.sourceHandle) && isPowerTargetHandle(e.targetHandle);
 
-  const resolveEdge = (e: Edge): { itemId: string | null; rate: number } => {
+  const resolveEdge = (e: Edge): { itemId: string | null; rate: number; demand: number } => {
     // Câbles énergie : réseau séparé, ne portent aucun flux d'item.
-    if (isPowerEdge(e)) return { itemId: null, rate: 0 };
+    if (isPowerEdge(e)) return { itemId: null, rate: 0, demand: 0 };
     const cached = edgeFlow.get(e.id);
     if (cached) return cached;
-    if (resolving.has(e.id)) return { itemId: null, rate: 0 }; // garde anti-cycle
+    if (resolving.has(e.id)) return { itemId: null, rate: 0, demand: 0 }; // garde anti-cycle
     resolving.add(e.id);
 
-    let res: { itemId: string | null; rate: number };
+    let item: string | null;
+    let demand: number;
     if (isLogistics(e.source)) {
-      // Total entrant du hub, réparti sur ses arêtes sortantes.
+      // Total réellement entrant du hub (déjà plafonné en amont), réparti sur ses arêtes sortantes.
       let total = 0;
-      let item: string | null = null;
+      item = null;
       for (const ie of inc.get(e.source) ?? []) {
         const r = resolveEdge(ie);
         total += r.rate;
         if (item == null) item = r.itemId;
       }
       const outDeg = (out.get(e.source) ?? []).length || 1;
-      res = { itemId: item, rate: total / outDeg };
+      demand = total / outDeg;
     } else {
       // Node machine : débit de l'item du handle source, réparti sur les belts du même handle.
       const map = nodeOutputs.get(e.source);
       const handleItem = e.sourceHandle?.startsWith('out-') ? e.sourceHandle.slice(4) : undefined;
-      const item =
-        handleItem && map?.has(handleItem) ? handleItem : (map?.keys().next().value ?? null);
+      item = handleItem && map?.has(handleItem) ? handleItem : (map?.keys().next().value ?? null);
       const sameHandle = (out.get(e.source) ?? []).filter(
         (x) => (x.sourceHandle ?? '') === (e.sourceHandle ?? ''),
       ).length;
-      res = { itemId: item, rate: item ? (map?.get(item) ?? 0) / (sameHandle || 1) : 0 };
+      demand = item ? (map?.get(item) ?? 0) / (sameHandle || 1) : 0;
     }
 
+    const res = { itemId: item, rate: Math.min(demand, maxBeltCapacity), demand };
     resolving.delete(e.id);
     edgeFlow.set(e.id, res);
     return res;
@@ -220,7 +310,8 @@ export function computeFactory(
       itemId: flow.itemId,
       itemName: flow.itemId ? itemName(flow.itemId) : null,
       ratePerMin: round(flow.rate),
-      belt: planBelt(flow.rate, game.belts),
+      demandPerMin: round(flow.demand),
+      belt: planBelt(flow.demand, game.belts),
     };
   });
 

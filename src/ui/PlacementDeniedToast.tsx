@@ -24,13 +24,29 @@ export function PlacementDeniedToast() {
   const name = gameData.buildings.find((b) => b.id === denied.buildingId)?.name ?? denied.buildingId;
 
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+    <div className="pointer-events-none fixed bottom-6 right-6 z-50 flex flex-col gap-2">
       <div
         role="alert"
-        className="pointer-events-auto rounded-lg border border-red-800/60 bg-red-950/80 px-3 py-2 text-xs text-red-200 shadow-lg backdrop-blur"
+        className="pointer-events-auto relative rounded-lg border border-zinc-800/80 bg-zinc-950/85 px-4 py-3 text-xs text-zinc-100 shadow-2xl backdrop-blur-xl nf-glow-box-red animate-slide-up flex items-center gap-3"
       >
-        <span className="font-semibold">AP insuffisants</span> — {name} coûte {denied.cost} AP
-        (solde : {Math.floor(denied.available)}).
+        {/* Coins HUD Industriels */}
+        <div className="nf-hud-corner nf-hud-corner-tl" style={{ '--hud-border-color': 'rgba(239, 68, 68, 0.5)', width: '8px', height: '8px' } as React.CSSProperties} />
+        <div className="nf-hud-corner nf-hud-corner-tr" style={{ '--hud-border-color': 'rgba(239, 68, 68, 0.5)', width: '8px', height: '8px' } as React.CSSProperties} />
+        <div className="nf-hud-corner nf-hud-corner-bl" style={{ '--hud-border-color': 'rgba(239, 68, 68, 0.5)', width: '8px', height: '8px' } as React.CSSProperties} />
+        <div className="nf-hud-corner nf-hud-corner-br" style={{ '--hud-border-color': 'rgba(239, 68, 68, 0.5)', width: '8px', height: '8px' } as React.CSSProperties} />
+
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-red-500/10 border border-red-500/20 text-red-400 font-mono font-bold text-sm">
+          ⚠
+        </div>
+
+        <div className="min-w-0">
+          <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-red-400 mb-0.5">
+            // PLACEMENT_DENIED // AP_INSUFFICIENT
+          </div>
+          <div className="text-zinc-300 font-sans leading-relaxed text-[11px]">
+            <span className="font-bold text-zinc-200">{name}</span> requiert <span className="text-red-400 font-mono font-bold">{denied.cost} AP</span> (solde : {Math.floor(denied.available)} AP)
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
-import { useContext, useEffect } from 'react';
+import { useContext, useEffect, useRef } from 'react';
+import { gsap } from 'gsap';
 import { Handle, NodeToolbar, Position, useViewport, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import type { Building } from '@/data/types';
 import { useFactoryStore } from '@/store/useFactoryStore';
@@ -8,7 +9,7 @@ import { computeNodeInfo } from '@/graph/nodeInfo';
 import { computeMachineStatus, type MachineState } from '@/graph/machineStatus';
 import { ExtractionIcon, SmeltingIcon, ManufacturingIcon, LogisticsIcon, PowerIcon } from '@/ui/icons';
 import { ItemIcon } from '@/ui/assets';
-import { NodeFlowContext, PowerContext, PowerConnectionsContext, PowerNetworkContext } from '@/ui/NodeFlowContext';
+import { NodeFlowContext, PowerContext, PowerConnectionsContext, PowerNetworkContext, ActivePowerNodesContext, AnyPowerNetworkActiveContext } from '@/ui/NodeFlowContext';
 
 /**
  * Silhouettes personnalisées :
@@ -258,6 +259,8 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
   const poweredMap = useContext(PowerContext);
   const powerConnections = useContext(PowerConnectionsContext);
   const powerNetworkMap = useContext(PowerNetworkContext);
+  const activePowerNodes = useContext(ActivePowerNodesContext);
+  const anyPowerNetworkActive = useContext(AnyPowerNetworkActiveContext);
   const { zoom } = useViewport();
   const updateNodeInternals = useUpdateNodeInternals();
 
@@ -305,19 +308,29 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
   if (building?.id === 'power-pole') {
     const connections = powerConnections.get(id) ?? 0;
     const showLabel = zoom > 0.7;
+    const isActive = anyPowerNetworkActive && activePowerNodes.has(id);
+    const poleOpacity = anyPowerNetworkActive ? (activePowerNodes.has(id) ? 1.0 : 0.08) : 0.45;
     return (
       <div
         title="Poteau électrique — 1 entrée + 3 sorties de dispatch"
+        style={{ opacity: poleOpacity }}
         className={[
           'relative flex h-14 w-14 items-center justify-center rounded-full bg-zinc-950/90 border border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.25)] transition-all duration-300',
           selected ? 'border-amber-400 ring-2 ring-amber-500/80 shadow-[0_0_20px_rgba(245,158,11,0.5)]' : '',
+          isActive && !selected ? 'border-amber-400 shadow-[0_0_22px_rgba(245,158,11,0.65)]' : '',
         ].join(' ')}
       >
         {selected && <HudBrackets color="#f59e0b" />}
 
         {/* Gyroscope */}
-        <div className="absolute inset-0.5 rounded-full border border-dashed border-amber-500/35 nf-energy-ring-rotate" />
-        <div className="absolute inset-2 rounded-full border border-dashed border-amber-500/20 nf-energy-ring-reverse" />
+        <div 
+          className="absolute inset-0.5 rounded-full border border-dashed border-amber-500/35 nf-energy-ring-rotate" 
+          style={{ animationDuration: isActive ? '3.5s' : '10s' }}
+        />
+        <div 
+          className="absolute inset-2 rounded-full border border-dashed border-amber-500/20 nf-energy-ring-reverse" 
+          style={{ animationDuration: isActive ? '2.5s' : '7s' }}
+        />
         <div className="absolute inset-2 rounded-full bg-amber-500/5 animate-pulse" />
 
         <NodeActions id={id} data={data} />
@@ -456,34 +469,548 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
 
   const IconComponent = building ? CATEGORY_ICON[building.category] : null;
   const round = (n: number) => Math.round(n * 100) / 100;
+  const isNodeActive = anyPowerNetworkActive && activePowerNodes.has(id);
+  const cardOpacity = anyPowerNetworkActive
+    ? (activePowerNodes.has(id) ? 1.0 : 0.35)
+    : 1.0;
+  const handleOpacity = anyPowerNetworkActive ? (activePowerNodes.has(id) ? 1.0 : 0.15) : 1.0;
+
+  // ── Custom layout for Smelters ──
+  if (building?.category === 'smelting') {
+    const perItem = info.configured;
+    const isNominal = machineState === 'nominal';
+    const isEnergyItem = (itemId: string) => gameData.items.find((i) => i.id === itemId)?.category === 'energy';
+
+    const inPorts: PortDef[] = perItem
+      ? info.inputs
+          .filter((p) => !isEnergyItem(p.itemId))
+          .map((p) => ({ id: `in-${p.itemId}`, title: `${p.itemName} · ${p.ratePerMin}/min` }))
+      : Array.from({ length: genericPorts(building, data, 'inputs') }, (_, i) => ({
+          id: `in-${i}`,
+        }));
+
+    const outPorts: PortDef[] = perItem
+      ? info.outputs
+          .filter((p) => !isEnergyItem(p.itemId))
+          .map((p) => ({ id: `out-${p.itemId}`, title: `${p.itemName} · ${p.ratePerMin}/min` }))
+      : Array.from({ length: genericPorts(building, data, 'outputs') }, (_, i) => ({
+          id: `out-${i}`,
+        }));
+
+    const isNodeActive = anyPowerNetworkActive && activePowerNodes.has(id);
+    const cardOpacity = anyPowerNetworkActive
+      ? (activePowerNodes.has(id) ? 1.0 : 0.35)
+      : 1.0;
+    const handleOpacity = anyPowerNetworkActive ? (activePowerNodes.has(id) ? 1.0 : 0.15) : 1.0;
+
+    // Determine core glow state class
+    let coreGlowClass = 'nf-smelter-core-glow-nominal';
+    let fanSpeed = '2.5s';
+    let tempText = 'TEMP: 1450°C';
+    let statusText = 'CORE_NOMINAL';
+    if (!powered) {
+      coreGlowClass = 'nf-smelter-core-glow-unpowered';
+      fanSpeed = '0s'; // paused
+      tempText = 'TEMP: 20°C';
+      statusText = 'POWER_OFF';
+    } else if (machineState === 'starved') {
+      coreGlowClass = 'nf-smelter-core-glow-starved';
+      fanSpeed = '8s'; // slow spin
+      tempText = 'TEMP: 280°C';
+      statusText = 'COLD_STANDBY';
+    } else if (machineState === 'blocked') {
+      coreGlowClass = 'nf-smelter-core-glow-blocked';
+      fanSpeed = '0s'; // paused
+      tempText = 'TEMP: 1450°C';
+      statusText = 'CASTING_HALTED';
+    } else if (machineState === 'unpowered') {
+      coreGlowClass = 'nf-smelter-core-glow-unpowered';
+      fanSpeed = '0s'; // paused
+      tempText = 'TEMP: 20°C';
+      statusText = 'POWER_OFF';
+    }
+
+    const styleVariables = {
+      '--category-color': '#f97316',
+      '--category-glow': isNodeActive ? 'rgba(249, 115, 22, 0.55)' : 'rgba(249, 115, 22, 0.25)',
+      '--category-glow-soft': 'rgba(249, 117, 22, 0.08)',
+      '--turbine-speed': fanSpeed,
+      opacity: cardOpacity,
+    } as React.CSSProperties;
+
+    // GSAP DOM Element references
+    const fanRef = useRef<SVGSVGElement | null>(null);
+    const coreRef = useRef<HTMLDivElement | null>(null);
+    const leftChimneyRef = useRef<HTMLDivElement | null>(null);
+    const rightChimneyRef = useRef<HTMLDivElement | null>(null);
+    const fanTweenRef = useRef<gsap.core.Tween | null>(null);
+
+    // GSAP Effect 1: Fan Rotation with smooth speed scale and decay halts
+    useEffect(() => {
+      if (!fanRef.current) return;
+      
+      if (!fanTweenRef.current) {
+        fanTweenRef.current = gsap.to(fanRef.current, {
+          rotation: 360,
+          duration: 1.5,
+          repeat: -1,
+          ease: 'none',
+          paused: true
+        });
+      }
+
+      const tween = fanTweenRef.current;
+      const isFanActive = powered && machineState !== 'blocked' && machineState !== 'unpowered';
+
+      if (isFanActive) {
+        if (tween.paused()) {
+          tween.play();
+        }
+        const targetSpeed = machineState === 'starved' ? 0.25 : 1.0;
+        gsap.to(tween, { timeScale: targetSpeed, duration: 1.5, ease: 'power1.out' });
+      } else {
+        // Decay speed smoothly to 0 (physics halt feel)
+        gsap.to(tween, { 
+          timeScale: 0, 
+          duration: 2.0, 
+          ease: 'power2.out',
+          onComplete: () => {
+            if (!isFanActive && tween.timeScale() === 0) {
+              tween.pause();
+            }
+          }
+        });
+      }
+    }, [powered, machineState]);
+
+    // GSAP Effect 2: Molten core glow pulsing & color transitions
+    useEffect(() => {
+      if (!coreRef.current) return;
+      
+      gsap.killTweensOf(coreRef.current);
+
+      if (!powered) {
+        gsap.to(coreRef.current, { opacity: 0, filter: 'brightness(0.2)', duration: 1.2, ease: 'power2.out' });
+      } else if (machineState === 'starved') {
+        gsap.to(coreRef.current, { opacity: 0.35, duration: 0.8 });
+        gsap.fromTo(coreRef.current, 
+          { filter: 'brightness(0.6) contrast(1.0)' },
+          { 
+            filter: 'brightness(0.85) contrast(1.1)', 
+            duration: 2.5, 
+            repeat: -1, 
+            yoyo: true, 
+            ease: 'sine.inOut' 
+          }
+        );
+      } else if (machineState === 'blocked') {
+        gsap.to(coreRef.current, { 
+          opacity: 0.95, 
+          filter: 'brightness(1.15) contrast(1.2)', 
+          duration: 0.8, 
+          ease: 'power1.out' 
+        });
+      } else {
+        // Nominal
+        gsap.to(coreRef.current, { opacity: 0.9, duration: 0.5 });
+        gsap.fromTo(coreRef.current, 
+          { filter: 'brightness(0.9) contrast(1.1)' },
+          { 
+            filter: 'brightness(1.25) contrast(1.25)', 
+            duration: 1.2, 
+            repeat: -1, 
+            yoyo: true, 
+            ease: 'sine.inOut' 
+          }
+        );
+      }
+    }, [powered, machineState]);
+
+    // GSAP Effect 3: Dynamic chimney sparks particle emitter (random physics)
+    useEffect(() => {
+      const isActive = powered && machineState === 'nominal';
+      if (!isActive) return;
+
+      const spawnSpark = (container: HTMLDivElement) => {
+        if (!container) return;
+        const spark = document.createElement('div');
+        spark.className = 'nf-smelter-chimney-spark-live';
+        
+        const randomX = (Math.random() - 0.5) * 12; // -6px to +6px
+        const scale = 0.5 + Math.random() * 0.5;
+        
+        container.appendChild(spark);
+        
+        gsap.fromTo(spark, 
+          { 
+            x: randomX, 
+            y: 0, 
+            scale: scale, 
+            opacity: 1 
+          },
+          {
+            x: randomX * 2.5,
+            y: -25 - Math.random() * 15,
+            scale: 0.1,
+            opacity: 0,
+            duration: 1.2 + Math.random() * 0.6,
+            ease: 'power1.out',
+            onComplete: () => {
+              spark.remove();
+            }
+          }
+        );
+      };
+
+      const interval = setInterval(() => {
+        if (leftChimneyRef.current) spawnSpark(leftChimneyRef.current);
+        if (rightChimneyRef.current) spawnSpark(rightChimneyRef.current);
+      }, 400);
+
+      return () => {
+        clearInterval(interval);
+      };
+    }, [powered, machineState]);
+
+    return (
+      <div
+        style={styleVariables}
+        className={[
+          'relative min-h-[132px] w-[300px] text-xs shadow-2xl transition-all duration-300 nf-smelter-node flex flex-col overflow-visible',
+          selected ? 'nf-node-selected-glow scale-[1.01]' : '',
+        ].join(' ')}
+      >
+        {selected && <HudBrackets color="#f97316" />}
+        <NodeActions id={id} data={data} />
+
+        {/* Physical Chimney Stacks protruding from the top */}
+        <div ref={leftChimneyRef} className="absolute -top-[10px] left-[32px] w-6 h-[10px] bg-zinc-900 border-t-2 border-l border-r border-zinc-800 rounded-t shadow-[0_-2px_4px_rgba(0,0,0,0.5)] z-0 flex items-end justify-center">
+          <div className="w-3.5 h-[6px] bg-zinc-950 rounded-t border-t border-zinc-900" />
+        </div>
+        <div ref={rightChimneyRef} className="absolute -top-[10px] right-[32px] w-6 h-[10px] bg-zinc-900 border-t-2 border-l border-r border-zinc-800 rounded-t shadow-[0_-2px_4px_rgba(0,0,0,0.5)] z-0 flex items-end justify-center">
+          <div className="w-3.5 h-[6px] bg-zinc-950 rounded-t border-t border-zinc-900" />
+        </div>
+
+        {/* 1. TOP EXHAUST STACK & TURBINE */}
+        <div className="w-full h-8 flex items-center justify-between px-3 nf-smelter-exhaust-stack relative z-10">
+          <div className="w-12 h-2.5 rounded-sm nf-smelter-vent-grille border border-zinc-800/40" />
+          <div className="flex items-center gap-1.5 bg-zinc-950/90 border border-zinc-800 px-2 py-0.5 rounded-full shadow-[inset_0_1px_2px_rgba(0,0,0,0.6)]">
+            <span className="text-[8px] font-mono text-zinc-400 uppercase tracking-wide">Exhaust fan</span>
+            <div className="w-4 h-4 rounded-full bg-zinc-900 border border-zinc-700/60 flex items-center justify-center overflow-hidden">
+              <svg 
+                ref={fanRef}
+                className="w-3.5 h-3.5 text-zinc-400"
+                fill="none" 
+                viewBox="0 0 24 24" 
+                stroke="currentColor" 
+                strokeWidth={2.5}
+              >
+                <path d="M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
+                <path d="M12 12c-2-3-4-2-4-2s1 3 4 2M12 12c3 2 2 4 2 4s-3-1-4-2M12 12c-3-2-2-4-2-4s3 1 4 2M12 12c2 3 4 2 4 2s-1-3-4-2" />
+              </svg>
+            </div>
+          </div>
+          <div className="w-12 h-2.5 rounded-sm nf-smelter-vent-grille border border-zinc-800/40" />
+        </div>
+
+        {/* 2. LED CONTROLLER READOUT (Header) */}
+        <div className="flex items-center justify-between gap-2 border-b border-zinc-900 px-3 py-2 bg-zinc-950/40 relative z-10">
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-orange-500/10 text-orange-400 border border-orange-500/20 shrink-0 shadow-sm">
+              <SmeltingIcon className="h-3.5 w-3.5" />
+            </span>
+            <span className="font-extrabold tracking-tight text-zinc-100 text-[12.5px] uppercase">{building?.name ?? 'Smelter'}</span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="rounded bg-zinc-800/80 px-1 py-0.5 text-[8.5px] font-extrabold text-zinc-400 border border-zinc-700/30 flex items-center font-mono">
+              <span className="text-emerald-450 drop-shadow-[0_0_2px_rgba(16,185,129,0.5)]">
+                {rotation === 0 && '▶'}
+                {rotation === 90 && '▼'}
+                {rotation === 180 && '◀'}
+                {rotation === 270 && '▲'}
+              </span>
+            </span>
+
+            {info.powerMW > 0 && (
+              <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[8.5px] font-extrabold text-amber-400 border border-amber-500/20 flex items-center gap-0.5 shrink-0 font-mono">
+                <span>⚡</span>
+                <span>{info.powerMW} MW</span>
+              </span>
+            )}
+
+            {/* LED bar graph for thermal load */}
+            {(() => {
+              const temp = powered ? (machineState === 'starved' ? 280 : 1450) : 20;
+              const totalBars = 6;
+              const activeBars = Math.round((temp / 1600) * totalBars);
+              return (
+                <span className="inline-flex gap-[1.5px] items-center bg-zinc-950/80 px-1.5 py-0.5 rounded border border-zinc-800" title={`Charge thermique: ${temp}°C`}>
+                  {Array.from({ length: totalBars }).map((_, i) => (
+                    <span 
+                      key={i} 
+                      className={`w-[2.5px] h-[5px] rounded-[0.5px] ${i < activeBars ? 'bg-orange-500 shadow-[0_0_2px_#f97316]' : 'bg-zinc-800'}`} 
+                    />
+                  ))}
+                </span>
+              );
+            })()}
+
+            {(() => {
+              const stateKey = machineState || 'unpowered';
+              return (
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full relative z-10 nf-diode-glow"
+                  style={{
+                    '--state-color': STATE_STYLE[stateKey].color,
+                    background: STATE_STYLE[stateKey].color,
+                    animation:
+                      stateKey === 'nominal' ? undefined : 'nf-activity-dot 1s ease-in-out infinite',
+                  } as React.CSSProperties}
+                />
+              );
+            })()}
+          </div>
+        </div>
+
+        {/* 4. MAIN CORE CHAMBER - HORIZONTAL LAYOUT */}
+        <div className="flex flex-1 p-3 gap-2 bg-[#121114] rounded-b-xl relative overflow-hidden">
+          <div className="absolute inset-0 pointer-events-none nf-furnace-grid opacity-20 z-0" />
+
+          {/* SVG Flow lines connecting ports to crucible */}
+          <svg className="absolute inset-0 w-full h-full pointer-events-none z-0" xmlns="http://www.w3.org/2000/svg">
+            <line x1="88" y1="50%" x2="123" y2="50%" stroke="rgba(24, 24, 27, 0.7)" strokeWidth="6" strokeLinecap="round" />
+            <line x1="177" y1="50%" x2="212" y2="50%" stroke="rgba(24, 24, 27, 0.7)" strokeWidth="6" strokeLinecap="round" />
+            {isNominal && powered && (
+              <>
+                <line x1="88" y1="50%" x2="123" y2="50%" stroke="#f97316" strokeWidth="2.5" strokeLinecap="round" className="nf-smelter-flowline" />
+                <line x1="177" y1="50%" x2="212" y2="50%" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" className="nf-smelter-flowline" />
+              </>
+            )}
+          </svg>
+
+          {/* Left: Input slot (Intake Hopper) */}
+          <div className="flex-1 flex flex-col justify-center items-center z-10">
+            {info.configured && info.inputs.length > 0 ? (
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-[7.5px] font-black uppercase text-zinc-450 tracking-wider select-none mb-0.5">Feed Intake</span>
+                {info.inputs.map((input, idx) => {
+                  const actualRate = actualFlow?.inputs.get(input.itemId);
+                  const consumed = input.ratePerMin;
+                  const connected = actualRate !== undefined;
+                  const diff = connected ? actualRate - consumed : 0;
+                  const starved = diff < -0.01;
+                  const surplus = diff > 0.01;
+
+                  return (
+                    <div 
+                      key={idx} 
+                      className="flex flex-col items-center justify-center p-2 rounded-xl nf-smelter-port-box nf-smelter-port-box-in border border-zinc-800/60 w-20 shrink-0"
+                    >
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-zinc-950 border border-zinc-800 shadow-[inset_0_2px_4px_rgba(0,0,0,0.9)] mb-1.5 transition-all duration-300 hover:border-orange-500/50 hover:shadow-[0_0_8px_rgba(249,115,22,0.25),inset_0_2px_4px_rgba(0,0,0,0.9)]">
+                        <ItemIcon itemId={input.itemId} size={32} />
+                      </div>
+                      
+                      {connected && (starved || surplus) ? (
+                        <span className="font-mono flex items-baseline gap-0.5 bg-zinc-900/80 px-1.5 py-0.5 rounded border border-zinc-800 text-[8.5px] font-bold">
+                          <span
+                            className={`font-extrabold ${starved ? 'text-amber-450 animate-pulse' : 'text-sky-450'}`}
+                            title={starved ? 'Sous-alimenté' : 'Reçu en surplus'}
+                          >
+                            {round(actualRate)}
+                          </span>
+                          <span className="text-[7.5px] text-zinc-400">/{round(consumed)}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[8.5px] text-orange-400 font-mono font-bold bg-orange-500/5 px-2 py-0.5 rounded border border-orange-500/15">{round(consumed)}/m</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full p-2 border border-dashed border-zinc-800/40 rounded-lg text-zinc-500 text-[8px] uppercase select-none">
+                No Intake
+              </div>
+            )}
+          </div>
+
+          {/* Center: Crucible Chamber (with Circular Temperature Gauge) & Cycle progress bar */}
+          <div className="w-[88px] flex flex-col items-center justify-center gap-2 relative z-10 border-l border-r border-zinc-900/60 px-1">
+            
+            {/* Circular temperature ring wrapping the viewport */}
+            <div 
+              className="w-[54px] h-[54px] rounded-full p-[4px] shadow-[0_4px_12px_rgba(0,0,0,0.7)] flex items-center justify-center relative overflow-hidden transition-all duration-500 shrink-0"
+              style={{
+                background: powered 
+                  ? `conic-gradient(from 180deg, #fef08a 0%, #f97316 ${machineState === 'starved' ? 20 : 60}%, #ef4444 ${machineState === 'starved' ? 30 : 90}%, #222024 ${machineState === 'starved' ? 30 : 90}%)`
+                  : '#222024'
+              }}
+            >
+              {/* Viewport Inner Chamber */}
+              <div className="w-[44px] h-[44px] rounded-full bg-zinc-950 flex items-center justify-center relative overflow-hidden z-10 shadow-[inset_0_1.5px_3px_rgba(0,0,0,0.95)]">
+                <div ref={coreRef} className={['absolute inset-0 rounded-full pointer-events-none transition-all duration-500', coreGlowClass].join(' ')} />
+                
+                {/* Viewport Crosshair Safety Grate */}
+                <div className="absolute inset-y-1 left-[21px] w-[1px] bg-zinc-950/45 z-10" />
+                <div className="absolute inset-x-1 top-[21px] h-[1px] bg-zinc-950/45 z-10" />
+                <div className="absolute inset-1 rounded-full border border-dashed border-zinc-950/30 pointer-events-none z-10" 
+                     style={{ backgroundImage: 'radial-gradient(circle, #000 1.2px, transparent 1.2px)', backgroundSize: '3.5px 3.5px' }} />
+
+                {/* Crucible Rim Bolt Rivets */}
+                {Array.from({ length: 6 }).map((_, idx) => {
+                  const angle = (idx * 360) / 6;
+                  const rad = (angle * Math.PI) / 180;
+                  const radius = 18; // px from center (placed on the inner rim edge)
+                  const left = 20.5 + radius * Math.cos(rad) - 1.5;
+                  const top = 20.5 + radius * Math.sin(rad) - 1.5;
+                  return (
+                    <div 
+                      key={idx} 
+                      className="absolute w-[3px] h-[3px] rounded-full bg-zinc-500 border border-zinc-950 shadow-[inset_0_0.5px_0.5px_rgba(255,255,255,0.25)] z-30 pointer-events-none" 
+                      style={{ left: `${left}px`, top: `${top}px` }}
+                    />
+                  );
+                })}
+
+                <div className="relative z-20 flex flex-col items-center justify-center select-none bg-zinc-950/90 w-[26px] h-[26px] rounded-full border border-zinc-900/80 shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                  <span className="text-[7px] font-black text-orange-400 font-mono tracking-tighter leading-none drop-shadow-[0_0_2px_#f97316]">
+                    {powered && machineState !== 'starved' ? '1450' : (machineState === 'starved' ? '280' : '20')}
+                  </span>
+                  <span className="text-[5px] text-zinc-500 font-mono uppercase tracking-widest leading-none mt-0.5">°C</span>
+                </div>
+              </div>
+            </div>
+
+            {info.configured && cycleTime > 0 ? (
+              <div className="w-full flex flex-col items-center gap-0.5">
+                <span className="text-[7px] font-black uppercase text-zinc-450 tracking-widest select-none">Melt Cycle</span>
+                <div className="w-[64px] h-1.5 relative rounded bg-zinc-950/90 border border-zinc-850/80 overflow-hidden shadow-inner">
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-l"
+                    style={{
+                      width: '100%',
+                      background: 'linear-gradient(90deg, #b91c1c, #f97316 80%, #ffeb99 100%)',
+                      boxShadow: '0 0 6px 1px rgba(249, 115, 22, 0.6)',
+                      transformOrigin: 'left center',
+                      animation: `nf-cycle ${cycleTime}s linear infinite`,
+                    } as React.CSSProperties}
+                  />
+                </div>
+              </div>
+            ) : (
+              <span className="text-[7px] font-extrabold uppercase text-zinc-500 tracking-wider text-center select-none">Ready</span>
+            )}
+          </div>
+
+          {/* Right: Output slot (Casting Channel) */}
+          <div className="flex-1 flex flex-col justify-center items-center z-10">
+            {info.configured && info.outputs.length > 0 ? (
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-[7.5px] font-black uppercase text-zinc-450 tracking-wider mr-1 text-right select-none mb-0.5">Casting Out</span>
+                {info.outputs.map((output, idx) => {
+                  const actualRate = actualFlow?.outputs.get(output.itemId);
+                  const produced = output.ratePerMin;
+                  const connected = actualRate !== undefined;
+                  const backedUp = connected && actualRate < produced - 0.01;
+
+                  return (
+                    <div 
+                      key={idx} 
+                      className="flex flex-col items-center justify-center p-2 rounded-xl nf-smelter-port-box nf-smelter-port-box-out border border-zinc-800/60 w-20 shrink-0"
+                    >
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-zinc-950 border border-zinc-800 shadow-[inset_0_2px_4px_rgba(0,0,0,0.9)] mb-1.5 transition-all duration-300 hover:border-emerald-500/50 hover:shadow-[0_0_8px_rgba(16,185,129,0.25),inset_0_2px_4px_rgba(0,0,0,0.9)]">
+                        <ItemIcon itemId={output.itemId} size={32} />
+                      </div>
+                      
+                      {backedUp ? (
+                        <span className="font-mono flex items-baseline gap-0.5 bg-zinc-900/80 px-1.5 py-0.5 rounded border border-zinc-800 text-[8.5px] font-bold">
+                          <span className="font-extrabold text-amber-400">{round(actualRate)}</span>
+                          <span className="text-[7.5px] text-zinc-400">/{round(produced)}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[8.5px] text-emerald-450 font-mono font-bold bg-emerald-500/5 px-2 py-0.5 rounded border border-emerald-500/15">{round(produced)}/m</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full p-2 border border-dashed border-zinc-800/40 rounded-lg text-zinc-550 text-[8px] uppercase select-none text-center">
+                📟 Configure Rec.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 5. CONNECTION HANDLES (Must map exactly to react-flow wiring) */}
+        <Handle
+          key="power-in"
+          id="power-in"
+          type="target"
+          position={getRotatedPosition(Position.Top, rotation)}
+          title="Entrée d'énergie"
+          style={{
+            ...getHandleStyle(getRotatedPosition(Position.Top, rotation), 'rgba(245, 158, 11, 0.6)'),
+            opacity: handleOpacity,
+            transition: 'opacity 0.22s ease-in-out',
+          }}
+          className={HANDLE_POWER_IN}
+        />
+
+        {inPorts.map((p, i) => {
+          const rotPos = getRotatedPosition(Position.Left, rotation);
+          return (
+            <Handle
+              key={p.id}
+              id={p.id}
+              type="target"
+              position={rotPos}
+              style={getMultiHandleStyle(rotPos, i, inPorts.length, 'rgba(249, 115, 22, 0.6)')}
+              title={p.title}
+              className={HANDLE_IN}
+            />
+          );
+        })}
+
+        {outPorts.map((p, i) => {
+          const rotPos = getRotatedPosition(Position.Right, rotation);
+          return (
+            <Handle
+              key={p.id}
+              id={p.id}
+              type="source"
+              position={rotPos}
+              style={getMultiHandleStyle(rotPos, i, outPorts.length, 'rgba(16, 185, 129, 0.6)')}
+              title={p.title}
+              className={HANDLE_OUT}
+            />
+          );
+        })}
+      </div>
+    );
+  }
 
   const styleVariables = {
     '--category-color': accentColor,
-    '--category-glow': CATEGORY_GLOW[building?.category ?? ''] ?? 'rgba(113, 113, 122, 0.25)',
+    '--category-glow': isNodeActive
+      ? (building?.category === 'power' ? 'rgba(16, 185, 129, 0.55)' : CATEGORY_GLOW[building?.category ?? ''] || 'rgba(113, 113, 122, 0.45)')
+      : (CATEGORY_GLOW[building?.category ?? ''] ?? 'rgba(113, 113, 122, 0.25)'),
     '--category-glow-soft': CATEGORY_GLOW_SOFT[building?.category ?? ''] ?? 'rgba(113, 113, 122, 0.08)',
+    opacity: cardOpacity,
   } as React.CSSProperties;
 
   return (
     <div
       style={styleVariables}
       className={[
-        'relative min-h-[76px] min-w-[220px] max-w-[260px] p-4.5 text-xs shadow-xl transition-all duration-300 nf-node-glass',
+        'relative min-h-[76px] min-w-[220px] max-w-[260px] p-4.5 text-xs shadow-xl transition-all duration-300 nf-node-glass nf-node-blueprint',
         silhouette,
         selected ? 'nf-node-selected-glow scale-[1.01]' : '',
       ].join(' ')}
     >
       {selected && <HudBrackets color={accentColor} />}
       <NodeActions id={id} data={data} />
-
-      {/* Grille de braises pour les fonderies */}
-      {building?.category === 'smelting' && (
-        <div className="absolute inset-0 rounded-t-[2.2rem] rounded-b-lg pointer-events-none nf-furnace-grid opacity-30 z-0" />
-      )}
-
-      {/* Lueur de cœur thermique pour les fonderies */}
-      {building?.category === 'smelting' && isNominal && (
-        <div className="absolute inset-0 rounded-t-[2.2rem] rounded-b-lg pointer-events-none nf-thermal-pulse z-0" />
-      )}
 
       {/* Balayage laser pour le manufacturing */}
       {building?.category === 'manufacturing' && isNominal && (
@@ -500,7 +1027,11 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
           type="source"
           position={getRotatedPosition(Position.Bottom, rotation)}
           title="Sortie d'énergie"
-          style={getHandleStyle(getRotatedPosition(Position.Bottom, rotation), 'rgba(245, 158, 11, 0.6)')}
+          style={{
+            ...getHandleStyle(getRotatedPosition(Position.Bottom, rotation), 'rgba(245, 158, 11, 0.6)'),
+            opacity: handleOpacity,
+            transition: 'opacity 0.22s ease-in-out',
+          }}
           className={HANDLE_POWER_OUT}
         />
       ) : (
@@ -510,7 +1041,11 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
           type="target"
           position={getRotatedPosition(Position.Top, rotation)}
           title="Entrée d'énergie"
-          style={getHandleStyle(getRotatedPosition(Position.Top, rotation), 'rgba(245, 158, 11, 0.6)')}
+          style={{
+            ...getHandleStyle(getRotatedPosition(Position.Top, rotation), 'rgba(245, 158, 11, 0.6)'),
+            opacity: handleOpacity,
+            transition: 'opacity 0.22s ease-in-out',
+          }}
           className={HANDLE_POWER_IN}
         />
       )}
@@ -591,8 +1126,14 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
               )}
             </span>
           )}
-          {info.powerMW > 0 && !isGenerator && (
-            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-extrabold text-amber-400 border border-amber-500/20 flex items-center gap-0.5 shrink-0 whitespace-nowrap">
+           {info.powerMW > 0 && !isGenerator && (
+            <span
+              style={{
+                opacity: handleOpacity,
+                transition: 'opacity 0.22s ease-in-out',
+              }}
+              className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-extrabold text-amber-400 border border-amber-500/20 flex items-center gap-0.5 shrink-0 whitespace-nowrap"
+            >
               <span>⚡</span>
               <span>{info.powerMW} MW</span>
             </span>
@@ -603,6 +1144,19 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
       {/* Body Content */}
       {info.configured ? (
         <div className="flex flex-col gap-1.5 relative z-10">
+          {/* Télémétrie de sous-en-tête technique unique par machine */}
+          <div className="flex justify-between items-center text-[9px] font-mono text-zinc-500 border-b border-zinc-900 pb-1.5 mb-1 select-none tracking-wider">
+            <span>// UNIT_NODE_{id.substring(0, 4).toUpperCase()}</span>
+            {building?.category === 'extraction' && (
+              <span className="text-amber-500/80 font-bold">PURITY: {data.purity?.toUpperCase() || 'NORMAL'}</span>
+            )}
+            {building?.category === 'manufacturing' && (
+              <span className="text-sky-400/85 font-bold">RECIPE_CYCLE: {info.recipe?.time ?? 0}S</span>
+            )}
+            {building?.category === 'power' && (
+              <span className="text-emerald-400/85 font-bold">SYS_GEN // GRID_SYS</span>
+            )}
+          </div>
           {isGenerator && (() => {
             const net = powerNetworkMap.get(id);
             const demand = net?.totalDemandMW ?? 0;

@@ -20,3 +20,10 @@ export interface PowerNetworkInfo {
 
 /** Map nodeId → totaux du réseau électrique auquel il appartient. */
 export const PowerNetworkContext = createContext<Map<string, PowerNetworkInfo>>(new Map());
+
+/** Set de nodeIds qui appartiennent à un réseau électrique actif (survolé ou sélectionné). */
+export const ActivePowerNodesContext = createContext<Set<string>>(new Set());
+
+/** Boolean indiquant si un réseau électrique est actif (survolé ou sélectionné). */
+export const AnyPowerNetworkActiveContext = createContext<boolean>(false);
+

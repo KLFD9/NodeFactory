@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Edge } from '@xyflow/react';
 import { useGraphStore, type MachineNode } from './useGraphStore';
 import { useFactoryStore } from './useFactoryStore';
+import { useProgressionStore } from './useProgressionStore';
 import { loadMockGameData } from '@/test/loadMock';
 
 const node = (id: string, buildingId: string, recipeId?: string): MachineNode => ({
@@ -136,5 +137,58 @@ describe('useGraphStore — liaison mineur ↔ gisement', () => {
     for (const n of useGraphStore.getState().nodes) {
       expect(n.data.depositId).toBeUndefined();
     }
+  });
+});
+
+describe('useGraphStore — copier/coller facture les AP comme une pose (anti-duplication gratuite)', () => {
+  beforeEach(() => {
+    useGraphStore.setState({ nodes: [], edges: [], selectedNodeId: null, clipboard: null });
+    useProgressionStore.setState({ automationPoints: 50 });
+  });
+
+  it('coller un Smelter copié déduit son coût (10 AP), comme une pose depuis la palette', () => {
+    const s = { ...node('A', 'smelter', 'iron-ingot'), selected: true };
+    useGraphStore.setState({ nodes: [s], edges: [] });
+
+    useGraphStore.getState().copySelection();
+    useGraphStore.getState().paste();
+
+    expect(useGraphStore.getState().nodes).toHaveLength(2);
+    expect(useProgressionStore.getState().automationPoints).toBe(40);
+  });
+
+  it('Cmd/Ctrl+D (duplicateSelection) facture également le coût du bâtiment dupliqué', () => {
+    const g = { ...node('G', 'coal-generator', 'coal-generator-power'), selected: true };
+    useGraphStore.setState({ nodes: [g], edges: [] });
+
+    useGraphStore.getState().duplicateSelection();
+
+    expect(useGraphStore.getState().nodes).toHaveLength(2);
+    expect(useProgressionStore.getState().automationPoints).toBe(35); // 50 - 15 AP (coal-generator)
+  });
+
+  it('AP insuffisants → le coller est refusé (aucun node ajouté, AP inchangés)', () => {
+    useProgressionStore.setState({ automationPoints: 5 });
+    const s = { ...node('A', 'smelter', 'iron-ingot'), selected: true };
+    useGraphStore.setState({ nodes: [s], edges: [] });
+
+    useGraphStore.getState().copySelection();
+    useGraphStore.getState().paste();
+
+    expect(useGraphStore.getState().nodes).toHaveLength(1);
+    expect(useGraphStore.getState().placementDenied).not.toBeNull();
+    expect(useProgressionStore.getState().automationPoints).toBe(5);
+  });
+
+  it('coller des hubs logistiques (splitter/merger, 5 AP chacun) déduit la somme', () => {
+    const a = { ...node('A', 'splitter'), selected: true };
+    const b = { ...node('B', 'merger'), selected: true };
+    useGraphStore.setState({ nodes: [a, b], edges: [] });
+
+    useGraphStore.getState().copySelection();
+    useGraphStore.getState().paste();
+
+    expect(useGraphStore.getState().nodes).toHaveLength(4);
+    expect(useProgressionStore.getState().automationPoints).toBe(40); // 50 - (5 + 5)
   });
 });

@@ -12,22 +12,36 @@ describe('generateResourceMap', () => {
     expect(a.length).toBeGreaterThan(0);
   });
 
-  it('produit des gisements valides (ressource, pureté, 1-2 pins dans le rayon)', () => {
+  it('produit des gisements valides (ressource, pureté, 1-3 pins dans le rayon)', () => {
     const deposits = generateResourceMap(RAW, 7);
     for (const d of deposits) {
       expect(RAW).toContain(d.resourceId);
       expect(Object.keys(PURITY_MULTIPLIER)).toContain(d.purity);
       expect(d.pins.length).toBeGreaterThanOrEqual(1);
-      expect(d.pins.length).toBeLessThanOrEqual(2);
+      expect(d.pins.length).toBeLessThanOrEqual(3);
       expect(d.radius).toBeGreaterThan(0);
       expect(d.blobPath).toMatch(/^M /);
       for (const pin of d.pins) {
         expect(Math.hypot(pin.x - d.x, pin.y - d.y)).toBeLessThanOrEqual(d.radius);
       }
-      // Deux pins d'un même gisement doivent être assez espacés pour 2 cards Miner.
-      if (d.pins.length === 2) {
-        const gap = Math.hypot(d.pins[0].x - d.pins[1].x, d.pins[0].y - d.pins[1].y);
-        expect(gap).toBeGreaterThanOrEqual(360);
+      // Plusieurs pins d'un même gisement doivent être assez espacés pour des cards Miner.
+      if (d.pins.length >= 2) {
+        for (let i = 0; i < d.pins.length; i++) {
+          for (let j = i + 1; j < d.pins.length; j++) {
+            const gap = Math.hypot(d.pins[i].x - d.pins[j].x, d.pins[i].y - d.pins[j].y);
+            expect(gap).toBeGreaterThanOrEqual(360);
+          }
+        }
+      }
+    }
+  });
+
+  it('garantit au moins un gisement par ressource brute', () => {
+    for (const seed of [1, 7, 42, 123, 999]) {
+      const deposits = generateResourceMap(RAW, seed);
+      const resourceIds = new Set(deposits.map((d) => d.resourceId));
+      for (const raw of RAW) {
+        expect(resourceIds).toContain(raw);
       }
     }
   });

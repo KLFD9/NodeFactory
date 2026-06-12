@@ -108,9 +108,11 @@ test.describe('Accueil (premier lancement)', () => {
 
     await page.getByTestId('welcome-start').click();
     await expect(welcome).toHaveCount(0);
-    // Le tutoriel prend le relais, étape 1.
+    // Le tutoriel prend le relais, section Électricité (1/3) — l'électricité se
+    // construit AVANT la chaîne de fer (pas de charbon, pas de courant).
     await expect(page.getByTestId('tutorial-panel')).toBeVisible();
-    await expect(page.getByTestId('tutorial-panel')).toContainText('1/5');
+    await expect(page.getByTestId('tutorial-panel')).toContainText('ÉLECTRICITÉ — 1/3');
+    await expect(page.getByTestId('tutorial-panel')).toContainText('Extrais le charbon');
   });
 
   test('joueur qui revient (welcomeSeen) : pas d’écran d’accueil', async ({ page }) => {

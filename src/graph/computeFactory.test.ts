@@ -141,6 +141,79 @@ describe('computeFactory (bilan matière + énergie)', () => {
   });
 });
 
+describe('computeFactory — capacité physique des convoyeurs (plafonnement du flux)', () => {
+  const bigOutput: GameData = {
+    items: [
+      { id: 'ore', name: 'Ore', category: 'raw', raw: true },
+      { id: 'part', name: 'Part', category: 'part', raw: false },
+    ],
+    buildings: [
+      { id: 'source', name: 'Source', category: 'manufacturing', powerMW: 0 },
+      { id: 'sink', name: 'Sink', category: 'manufacturing', powerMW: 0 },
+      { id: 'splitter', name: 'Splitter', category: 'logistics', powerMW: 0 },
+    ],
+    recipes: [
+      {
+        id: 'produce',
+        name: 'Produce',
+        alternate: false,
+        time: 1,
+        producedIn: 'source',
+        ingredients: [],
+        products: [{ item: 'part', amountPerCycle: 25 }], // 25/cycle, 1s → 1500/min
+      },
+      {
+        id: 'consume',
+        name: 'Consume',
+        alternate: false,
+        time: 1,
+        producedIn: 'sink',
+        ingredients: [{ item: 'part', amountPerCycle: 100 }], // demande énorme, jamais le goulot
+        products: [],
+      },
+    ],
+    belts: game.belts, // capacité max = Mk6 = 1200/min
+    generators: [],
+  };
+
+  it('un débit > capacité du meilleur convoyeur (1200/min) est plafonné, surcharge signalée', () => {
+    const nodes = [
+      machine('src', { buildingId: 'source', recipeId: 'produce' }),
+      machine('snk', { buildingId: 'sink', recipeId: 'consume' }),
+    ];
+    const edges: Edge[] = [{ id: 'e1', source: 'src', target: 'snk' }];
+    const summary = computeFactory(nodes, edges, bigOutput, NO_POWER());
+    const plan = summary.edges[0];
+    expect(plan.demandPerMin).toBe(1500);
+    expect(plan.ratePerMin).toBe(1200); // plafonné au Mk6
+    expect(plan.belt.overloaded).toBe(true);
+    expect(plan.belt.lines).toBe(2);
+  });
+
+  it('le plafonnement se propage en aval à travers un splitter', () => {
+    const nodes = [
+      machine('src', { buildingId: 'source', recipeId: 'produce' }), // 1500/min
+      machine('split', { buildingId: 'splitter' }),
+      machine('a', { buildingId: 'sink', recipeId: 'consume' }),
+      machine('b', { buildingId: 'sink', recipeId: 'consume' }),
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', source: 'src', target: 'split' },
+      { id: 'e2', source: 'split', target: 'a' },
+      { id: 'e3', source: 'split', target: 'b' },
+    ];
+    const summary = computeFactory(nodes, edges, bigOutput, NO_POWER());
+    const e1 = summary.edges.find((p) => p.edgeId === 'e1')!;
+    const e2 = summary.edges.find((p) => p.edgeId === 'e2')!;
+    // e1 : 1500/min demandés, plafonnés à 1200/min (Mk6).
+    expect(e1.demandPerMin).toBe(1500);
+    expect(e1.ratePerMin).toBe(1200);
+    // Le splitter répartit le flux RÉELLEMENT reçu (1200), pas le débit théorique (1500).
+    expect(e2.demandPerMin).toBe(600);
+    expect(e2.ratePerMin).toBe(600);
+  });
+});
+
 describe('computeFactory — gating électrique (pas de courant, pas de production)', () => {
   const chain = () => [
     machine('miner', { buildingId: 'miner-mk1', resourceId: 'iron-ore', purity: 'normal' }),
@@ -163,15 +236,21 @@ describe('computeFactory — gating électrique (pas de courant, pas de producti
   });
 
   it('chaîne câblée à un Coal Generator → production nominale', () => {
-    const nodes = [...chain(), machine('gen', { buildingId: 'coal-generator' })];
+    const nodes = [
+      ...chain(),
+      machine('gen', { buildingId: 'coal-generator' }),
+      machine('coal-miner', { buildingId: 'miner-mk1', resourceId: 'coal', purity: 'normal' }),
+    ];
     const edges: Edge[] = [
       belt,
       { id: 'p1', source: 'gen', target: 'miner', sourceHandle: 'power-out', targetHandle: 'power-in' },
       { id: 'p2', source: 'gen', target: 'smelter', sourceHandle: 'power-out', targetHandle: 'power-in' },
+      { id: 'p3', source: 'gen', target: 'coal-miner', sourceHandle: 'power-out', targetHandle: 'power-in' },
+      { id: 'coal-belt', source: 'coal-miner', target: 'gen', sourceHandle: 'out-coal', targetHandle: 'in-coal' },
     ];
     const summary = computeFactory(nodes, edges, game);
     expect(summary.unpoweredMachines).toBe(0);
-    expect(summary.totalMachines).toBe(2);
+    expect(summary.totalMachines).toBe(3);
     // 60 ore/min extraits → 60 lingots... non : smelter = 30/min, surplus ore 30.
     expect(summary.production.find((p) => p.itemId === 'iron-ingot')?.ratePerMin).toBe(30);
   });
@@ -189,5 +268,43 @@ describe('computeFactory — gating électrique (pas de courant, pas de producti
     expect(summary.unpoweredMachines).toBe(20);
     expect(summary.totalMachines).toBe(0);
     expect(summary.production).toEqual([]);
+  });
+
+  it('générateur câblé mais SANS charbon entrant → 0 MW généré → réseau down → cascade', () => {
+    const nodes = [
+      ...chain(),
+      machine('gen', { buildingId: 'coal-generator', recipeId: 'coal-generator-power' }),
+    ];
+    const edges: Edge[] = [
+      belt,
+      { id: 'p1', source: 'gen', target: 'miner', sourceHandle: 'power-out', targetHandle: 'power-in' },
+      { id: 'p2', source: 'gen', target: 'smelter', sourceHandle: 'power-out', targetHandle: 'power-in' },
+    ];
+    const summary = computeFactory(nodes, edges, game);
+    // Sans flux de charbon entrant, le générateur ne produit aucun MW : réseau en déficit,
+    // donc le mineur et le smelter (et le générateur lui-même) sont hors tension.
+    expect(summary.unpoweredMachines).toBe(2);
+    expect(summary.totalMachines).toBe(0);
+    expect(summary.production).toEqual([]);
+  });
+
+  it('générateur nourri (mineur de charbon dédié) → tout le réseau tourne', () => {
+    const nodes = [
+      ...chain(),
+      machine('gen', { buildingId: 'coal-generator', recipeId: 'coal-generator-power' }),
+      machine('coal-miner', { buildingId: 'miner-mk1', resourceId: 'coal', purity: 'normal' }),
+    ];
+    const edges: Edge[] = [
+      belt,
+      { id: 'p1', source: 'gen', target: 'miner', sourceHandle: 'power-out', targetHandle: 'power-in' },
+      { id: 'p2', source: 'gen', target: 'smelter', sourceHandle: 'power-out', targetHandle: 'power-in' },
+      { id: 'p3', source: 'gen', target: 'coal-miner', sourceHandle: 'power-out', targetHandle: 'power-in' },
+      { id: 'coal-belt', source: 'coal-miner', target: 'gen', sourceHandle: 'out-coal', targetHandle: 'in-coal' },
+    ];
+    const summary = computeFactory(nodes, edges, game);
+    expect(summary.unpoweredMachines).toBe(0);
+    // miner + smelter + coal-miner + gen (configuré via recipeId)
+    expect(summary.totalMachines).toBe(4);
+    expect(summary.production.find((p) => p.itemId === 'iron-ingot')?.ratePerMin).toBe(30);
   });
 });

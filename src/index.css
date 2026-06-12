@@ -470,3 +470,418 @@ body,
   stroke: rgba(0, 0, 0, 0.5) !important;
   pointer-events: none !important; /* Let clicks pass through to the SVG */
 }
+
+/* ── Welcome Screen & Visual Identity Custom CSS ─────────────────── */
+
+/* Tech grid with rotating/floating sparks or dots */
+.nf-welcome-backdrop {
+  background-image: 
+    radial-gradient(circle at 50% 50%, rgba(249, 115, 22, 0.08) 0%, transparent 60%),
+    linear-gradient(rgba(24, 24, 27, 0.7) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(24, 24, 27, 0.7) 1px, transparent 1px);
+  background-size: 100% 100%, 24px 24px, 24px 24px;
+  background-color: #030305;
+}
+
+/* Corner HUD styling elements */
+.nf-hud-corner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: var(--hud-border-color, rgba(249, 115, 22, 0.7));
+  border-style: solid;
+  pointer-events: none;
+}
+.nf-hud-corner-tl {
+  top: -1px;
+  left: -1px;
+  border-width: 3px 0 0 3px;
+}
+.nf-hud-corner-tr {
+  top: -1px;
+  right: -1px;
+  border-width: 3px 3px 0 0;
+}
+.nf-hud-corner-bl {
+  bottom: -1px;
+  left: -1px;
+  border-width: 0 0 3px 3px;
+}
+.nf-hud-corner-br {
+  bottom: -1px;
+  right: -1px;
+  border-width: 0 3px 3px 0;
+}
+
+/* Custom glowing effects */
+.nf-glow-box-orange {
+  box-shadow: 
+    0 0 25px -5px rgba(249, 115, 22, 0.25),
+    0 0 10px -2px rgba(249, 115, 22, 0.15),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.nf-glow-text-orange {
+  text-shadow: 0 0 12px rgba(249, 115, 22, 0.5);
+}
+
+/* Animated warning stripe border overlay */
+@keyframes warning-stripe-shift {
+  from { background-position: 0 0; }
+  to { background-position: 40px 0; }
+}
+
+.nf-warning-stripe-border {
+  background: repeating-linear-gradient(
+    -45deg,
+    #fb923c 0px,
+    #fb923c 10px,
+    #18181b 10px,
+    #18181b 20px
+  );
+  background-size: 40px 40px;
+  animation: warning-stripe-shift 2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nf-warning-stripe-border {
+    animation: none;
+  }
+}
+
+/* Interactive module microcard hover states */
+.nf-interactive-module {
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(63, 63, 70, 0.4);
+}
+
+.nf-interactive-module:hover {
+  transform: translateY(-2px) scale(1.01);
+  border-color: var(--hover-color-border, #fb923c) !important;
+  background: rgba(24, 24, 27, 0.75) !important;
+  box-shadow: 0 8px 20px -8px var(--hover-color-glow, rgba(249, 115, 22, 0.2));
+}
+
+/* Technical stats layout styling */
+.nf-tech-stat {
+  font-family: ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  color: rgba(161, 161, 170, 0.6);
+}
+
+/* Shiny gradient animation for CTA */
+.nf-cta-btn {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  box-shadow: 0 4px 15px rgba(234, 88, 12, 0.35);
+  transition: all 200ms ease;
+}
+
+.nf-cta-btn::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -50%;
+  width: 25%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: skewX(-20deg);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .nf-cta-btn:hover::after {
+    left: 150%;
+    transition: left 0.85s ease-in-out;
+  }
+}
+
+.nf-cta-btn:hover {
+  background: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
+  box-shadow: 0 6px 20px rgba(249, 115, 22, 0.5), 0 0 0 2px rgba(251, 146, 60, 0.3);
+  transform: translateY(-1px);
+}
+
+.nf-cta-btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 8px rgba(234, 88, 12, 0.4);
+}
+
+/* Entrance Animations */
+@keyframes nf-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes nf-slide-up {
+  from { transform: translateY(16px) scale(0.975); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: nf-fade-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-up {
+  animation: nf-slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-slide-up {
+    animation: none !important;
+  }
+}
+
+.nf-glow-box-cyan {
+  box-shadow: 
+    0 0 25px -5px rgba(34, 211, 238, 0.25),
+    0 0 10px -2px rgba(34, 211, 238, 0.15),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.nf-glow-box-emerald {
+  box-shadow: 
+    0 0 25px -5px rgba(16, 185, 129, 0.25),
+    0 0 10px -2px rgba(16, 185, 129, 0.15),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.nf-glow-box-red {
+  box-shadow: 
+    0 0 25px -5px rgba(239, 68, 68, 0.25),
+    0 0 10px -2px rgba(239, 68, 68, 0.15),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Faint blueprint grid texture for canvas nodes */
+.nf-node-blueprint {
+  background-image: 
+    radial-gradient(rgba(255, 255, 255, 0.012) 1px, transparent 1px),
+    linear-gradient(rgba(63, 63, 70, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(63, 63, 70, 0.03) 1px, transparent 1px);
+  background-size: 8px 8px, 24px 24px, 24px 24px;
+}
+
+/* ── Custom Smelter visual design ── */
+
+.nf-smelter-node {
+  background: #0f0e10 !important;
+  border: 1px solid rgba(249, 115, 22, 0.25) !important;
+  box-shadow: 
+    0 12px 36px -12px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
+    0 0 12px 1px rgba(249, 115, 22, 0.08) !important;
+  border-radius: 12px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.nf-smelter-node.react-flow__node-selected,
+.nf-smelter-node.nf-node-selected-glow {
+  border-color: #f97316 !important;
+  box-shadow: 
+    0 0 0 1px #f97316,
+    0 0 20px 3px rgba(249, 115, 22, 0.35),
+    0 12px 36px -12px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08) !important;
+  transform: scale(1.01);
+}
+
+/* Smelter Exhaust Stack (Top Hood) */
+.nf-smelter-exhaust-stack {
+  background: linear-gradient(180deg, #181619 0%, #0f0e10 100%);
+  border-bottom: 2px solid #272529;
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+}
+
+.nf-smelter-vent-grille {
+  background: repeating-linear-gradient(
+    90deg,
+    #131114 0px,
+    #131114 3px,
+    #222024 3px,
+    #222024 6px
+  );
+}
+
+/* Slow / Fast spin for the internal turbine */
+@keyframes smelter-fan-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.nf-smelter-turbine-spin {
+  animation: smelter-fan-spin var(--turbine-speed, 3s) linear infinite;
+}
+
+/* Heating Core Crucible */
+.nf-smelter-crucible-chamber {
+  background: #09080a;
+  border: 1px solid rgba(249, 115, 22, 0.15);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+/* Molten metal core pulse animations */
+@keyframes smelter-core-nominal {
+  0%, 100% {
+    opacity: 0.85;
+    box-shadow: inset 0 0 16px rgba(239, 68, 68, 0.5), 0 0 24px rgba(249, 115, 22, 0.4);
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: inset 0 0 28px rgba(239, 68, 68, 0.8), 0 0 36px rgba(249, 115, 22, 0.75);
+    filter: brightness(1.25);
+  }
+}
+
+@keyframes smelter-core-starved {
+  0%, 100% {
+    opacity: 0.45;
+    box-shadow: inset 0 0 8px rgba(220, 38, 38, 0.3);
+  }
+  50% {
+    opacity: 0.6;
+    box-shadow: inset 0 0 14px rgba(220, 38, 38, 0.5);
+  }
+}
+
+.nf-smelter-core-glow-nominal {
+  background: radial-gradient(circle, #ffeb99 0%, #f97316 50%, #b91c1c 100%);
+  animation: smelter-core-nominal 2s ease-in-out infinite;
+}
+
+.nf-smelter-core-glow-starved {
+  background: radial-gradient(circle, #f97316 0%, #b91c1c 60%, #450a0a 100%);
+  animation: smelter-core-starved 4s ease-in-out infinite;
+}
+
+.nf-smelter-core-glow-blocked {
+  background: radial-gradient(circle, #ffeb99 0%, #f97316 65%, #7f1d1d 100%);
+  box-shadow: inset 0 0 20px rgba(239, 68, 68, 0.6), 0 0 16px rgba(249, 115, 22, 0.3);
+}
+
+.nf-smelter-core-glow-unpowered {
+  background: #18171a;
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.9);
+}
+
+/* Floating spark particles */
+@keyframes smelter-spark {
+  0% {
+    transform: translateY(18px) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(-22px) scale(0.3);
+    opacity: 0;
+  }
+}
+
+.nf-smelter-particle {
+  position: absolute;
+  width: 2.5px;
+  height: 2.5px;
+  background-color: #fef08a;
+  border-radius: 50%;
+  box-shadow: 0 0 4px #f97316;
+  pointer-events: none;
+  animation: smelter-spark var(--spark-duration, 1.8s) ease-out infinite;
+}
+
+/* Intake/Output Port Box Styles */
+.nf-smelter-port-box {
+  background: rgba(18, 17, 20, 0.7);
+  border: 1px solid rgba(63, 63, 70, 0.4);
+  transition: all 0.2s ease-in-out;
+}
+
+.nf-smelter-port-box-in {
+  border-left: 2.5px solid #f97316;
+}
+
+.nf-smelter-port-box-in:hover {
+  border-color: rgba(249, 115, 22, 0.6);
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.15);
+}
+
+.nf-smelter-port-box-out {
+  border-right: 2.5px solid #10b981;
+}
+
+.nf-smelter-port-box-out:hover {
+  border-color: rgba(16, 185, 129, 0.6);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.15);
+}
+
+/* Molten metal flowing pipes/flowlines inside card */
+@keyframes smelter-flow-dash {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+
+.nf-smelter-flowline {
+  stroke-dasharray: 4 2;
+  animation: smelter-flow-dash 0.6s linear infinite;
+}
+
+/* Accessibility: respect user preferences for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .nf-smelter-turbine-spin,
+  .nf-smelter-core-glow-nominal,
+  .nf-smelter-core-glow-starved,
+  .nf-smelter-particle,
+  .nf-smelter-flowline,
+  .nf-smelter-chimney-spark {
+    animation: none !important;
+  }
+  .nf-smelter-turbine-spin {
+    transform: rotate(45deg);
+  }
+  .nf-smelter-core-glow-nominal {
+    opacity: 0.9;
+    box-shadow: inset 0 0 16px rgba(239, 68, 68, 0.5), 0 0 20px rgba(249, 115, 22, 0.4);
+  }
+  .nf-smelter-core-glow-starved {
+    opacity: 0.5;
+    box-shadow: inset 0 0 8px rgba(220, 38, 38, 0.3);
+  }
+}
+
+/* Chimney rising spark particles */
+@keyframes smelter-chimney-spark {
+  0% {
+    transform: translate(var(--spark-x, 0px), 0px) scale(0.8);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(var(--spark-x, 0px) * 2.5), -30px) scale(0.2);
+    opacity: 0;
+  }
+}
+
+.nf-smelter-chimney-spark {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background-color: #fef08a;
+  border-radius: 50%;
+  box-shadow: 0 0 5px 1px #f97316;
+  pointer-events: none;
+  animation: smelter-chimney-spark 1.6s ease-out infinite;
+  animation-delay: var(--spark-delay, 0s);
+}
+

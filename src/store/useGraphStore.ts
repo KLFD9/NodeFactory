@@ -305,6 +305,18 @@ export const useGraphStore = create<GraphState>()(
     set((state) => {
       const cb = state.clipboard;
       if (!cb || cb.nodes.length === 0) return {};
+      // Coller pose de nouvelles machines : même coût en AP qu'un placement depuis la palette
+      // (sinon le copier-coller est un moyen gratuit de dupliquer des bâtiments payants).
+      const totalCost = cb.nodes.reduce((sum, n) => sum + (BUILDING_COSTS[n.data.buildingId] ?? 0), 0);
+      if (totalCost > 0 && !useProgressionStore.getState().spendAP(totalCost)) {
+        return {
+          placementDenied: {
+            buildingId: cb.nodes[0].data.buildingId,
+            cost: totalCost,
+            available: useProgressionStore.getState().automationPoints,
+          },
+        };
+      }
       const idMap = new Map<string, string>();
       const clones: MachineNode[] = cb.nodes.map((n) => {
         const id = nextId();

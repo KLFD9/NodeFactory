@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFactoryStore } from '@/store/useFactoryStore';
 import { useGraphStore } from '@/store/useGraphStore';
 import { useProgressionStore } from '@/store/useProgressionStore';
@@ -16,7 +16,47 @@ import { OfflineRecapModal } from './OfflineRecapModal';
 import { WelcomeModal } from './WelcomeModal';
 import { TutorialPanel } from './TutorialPanel';
 import { useProgressionTick } from './useProgressionTick';
+import { ResourceBanner } from './ResourceBanner';
 import { ReactFlowProvider } from '@xyflow/react';
+
+function TargetIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={props.className}
+      {...props}
+    >
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
+    </svg>
+  );
+}
+
+function GridIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={props.className}
+      {...props}
+    >
+      <rect x="3" y="3" width="7" height="7" />
+      <rect x="14" y="3" width="7" height="7" />
+      <rect x="14" y="14" width="7" height="7" />
+      <rect x="3" y="14" width="7" height="7" />
+    </svg>
+  );
+}
 
 function fmtAp(n: number): string {
   if (n < 1_000) return Math.floor(n).toString();
@@ -100,6 +140,19 @@ export function App() {
   const loadData = useFactoryStore((s) => s.loadData);
   const selectedNodeId = useGraphStore((s) => s.selectedNodeId);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
+  const [leftPanel, setLeftPanel] = useState<'milestones' | 'palette' | null>(null);
+  const leftMenuRef = useRef<HTMLDivElement>(null);
+
+  // Détecteur de clic extérieur pour fermer le menu de gauche
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (leftMenuRef.current && !leftMenuRef.current.contains(e.target as Node)) {
+        setLeftPanel(null);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   // Pilote la couche jeu : gains hors-ligne au démarrage + tick de progression live.
   useProgressionTick();
@@ -138,13 +191,79 @@ export function App() {
           </span>
         </header>
 
-        <div className="flex min-h-0 flex-1">
-          <aside className="flex w-64 shrink-0 flex-col gap-5 overflow-y-auto border-r border-zinc-800 p-4">
-            <MilestonePanel />
-            <div className="border-t border-zinc-800 pt-4">
-              <Palette />
+        <div className="relative flex min-h-0 flex-1">
+          {/* Bannière flottante des ressources cumulées (centrée en haut du canvas) */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 max-w-[min(90%,640px)]">
+            <ResourceBanner />
+          </div>
+
+          {/* Wrapper pour gérer le hover (Toolbar + Panneau) */}
+          <div
+            ref={leftMenuRef}
+            onMouseLeave={() => setLeftPanel(null)}
+            className="absolute left-4 top-1/2 -translate-y-1/2 z-40 flex items-center pointer-events-auto"
+          >
+            {/* Barre d'outils flottante (Left Toolbar) */}
+            <div className="flex flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-950/80 p-2 shadow-2xl backdrop-blur-md nf-glow-box-orange">
+              {/* Coins HUD Industriels */}
+              <div className="nf-hud-corner nf-hud-corner-tl" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.4)', width: '6px', height: '6px' } as React.CSSProperties} />
+              <div className="nf-hud-corner nf-hud-corner-tr" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.4)', width: '6px', height: '6px' } as React.CSSProperties} />
+              <div className="nf-hud-corner nf-hud-corner-bl" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.4)', width: '6px', height: '6px' } as React.CSSProperties} />
+              <div className="nf-hud-corner nf-hud-corner-br" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.4)', width: '6px', height: '6px' } as React.CSSProperties} />
+
+              <button
+                onClick={() => setLeftPanel(leftPanel === 'milestones' ? null : 'milestones')}
+                onMouseEnter={() => setLeftPanel('milestones')}
+                className={`relative flex h-14 w-12 flex-col gap-1 items-center justify-center cursor-pointer rounded border transition-all duration-200 ${
+                  leftPanel === 'milestones'
+                    ? 'border-orange-500 bg-orange-500/10 text-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.25)]'
+                    : 'border-zinc-800 bg-zinc-900/30 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300'
+                }`}
+                title="Objectifs de progression"
+              >
+                {leftPanel === 'milestones' && (
+                  <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.8)] animate-pulse" />
+                )}
+                <TargetIcon className="h-5 w-5" />
+                <span className="text-[7.5px] font-mono font-bold tracking-wider uppercase select-none">OBJ</span>
+              </button>
+
+              <button
+                onClick={() => setLeftPanel(leftPanel === 'palette' ? null : 'palette')}
+                onMouseEnter={() => setLeftPanel('palette')}
+                className={`relative flex h-14 w-12 flex-col gap-1 items-center justify-center cursor-pointer rounded border transition-all duration-200 ${
+                  leftPanel === 'palette'
+                    ? 'border-orange-500 bg-orange-500/10 text-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.25)]'
+                    : 'border-zinc-800 bg-zinc-900/30 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300'
+                }`}
+                title="Composants et Bâtiments"
+                data-testid="palette-toggle-btn"
+              >
+                {leftPanel === 'palette' && (
+                  <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.8)] animate-pulse" />
+                )}
+                <GridIcon className="h-5 w-5" />
+                <span className="text-[7.5px] font-mono font-bold tracking-wider uppercase select-none">COMP</span>
+              </button>
             </div>
-          </aside>
+
+            {/* Panneau de sélection flottant */}
+            {leftPanel && (
+              <div
+                className="ml-[12px] w-80 max-h-[80vh] flex flex-col rounded-lg border border-zinc-800/80 bg-zinc-950/85 p-5 shadow-2xl backdrop-blur-xl nf-glow-box-orange animate-slide-up"
+              >
+                {/* Coins HUD Industriels */}
+                <div className="nf-hud-corner nf-hud-corner-tl" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.5)' } as React.CSSProperties} />
+                <div className="nf-hud-corner nf-hud-corner-tr" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.5)' } as React.CSSProperties} />
+                <div className="nf-hud-corner nf-hud-corner-bl" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.5)' } as React.CSSProperties} />
+                <div className="nf-hud-corner nf-hud-corner-br" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.5)' } as React.CSSProperties} />
+
+                <div className="overflow-y-auto flex-1 pr-1">
+                  {leftPanel === 'milestones' ? <MilestonePanel /> : <Palette />}
+                </div>
+              </div>
+            )}
+          </div>
 
           <main className="min-w-0 flex-1">
             <GraphCanvas />

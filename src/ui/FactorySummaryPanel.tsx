@@ -6,8 +6,8 @@ import type { GameData } from '@/data/types';
 import { useProgressionStore } from '@/store/useProgressionStore';
 import { allowedAlternateRecipeIds } from '@/game/progression';
 import type { EfficiencyScore } from '@/game/balance';
-import { computeFactory, type ItemRate } from '@/graph/computeFactory';
-import { computePowerNetworks, type PowerNetwork } from '@/graph/power';
+import { computeFactoryAndPower, type ItemRate } from '@/graph/computeFactory';
+import type { PowerNetwork } from '@/graph/power';
 import type { Objective } from '@/solver';
 import { BottleneckPanel } from './BottleneckPanel';
 import { computeNodeInfo } from '@/graph/nodeInfo';
@@ -840,8 +840,7 @@ export function FactorySummaryPanel() {
     );
   }
 
-  const summary = computeFactory(nodes, edges, gameData);
-  const { networks: powerNetworks } = computePowerNetworks(nodes, edges, gameData);
+  const { summary, networks: powerNetworks } = computeFactoryAndPower(nodes, edges, gameData);
 
   // Débit total de sortie (surplus + bruts extraits).
   const totalOutputRate =

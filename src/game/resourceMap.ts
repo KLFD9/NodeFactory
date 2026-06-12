@@ -48,9 +48,12 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-/** Pondération des puretés : Normal majoritaire, extrêmes plus rares. */
+/** Pondération des puretés : Normal majoritaire, « pure » rare (1/8). */
 const PURITY_TABLE: Purity[] = [
   'impure',
+  'impure',
+  'normal',
+  'normal',
   'normal',
   'normal',
   'normal',
@@ -101,37 +104,69 @@ export function generateResourceMap(rawItemIds: string[], seed: number): Resourc
   const rng = mulberry32(seed);
   const deposits: ResourceDeposit[] = [];
 
-  for (let i = 0; i < DEPOSIT_COUNT; i++) {
-    // Place un centre en respectant une distance minimale (échec → on saute ce gisement).
+  // Au moins un gisement par ressource brute : on garantit les premiers slots, les suivants
+  // tirent une ressource au hasard. S'il y a plus de ressources que de slots, on agrandit.
+  const totalSlots = Math.max(DEPOSIT_COUNT, rawItemIds.length);
+  const order = rawItemIds.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+
+  for (let i = 0; i < totalSlots; i++) {
+    const guaranteed = i < order.length;
+    const resourceId = guaranteed
+      ? rawItemIds[order[i]]
+      : rawItemIds[Math.floor(rng() * rawItemIds.length)];
+
+    // Place un centre en respectant une distance minimale. Pour les ressources garanties, on
+    // relâche progressivement la distance minimale plutôt que de sauter ce gisement.
     let cx = 0;
     let cy = 0;
     let placed = false;
-    for (let attempt = 0; attempt < PLACEMENT_ATTEMPTS; attempt++) {
-      cx = (rng() * 2 - 1) * FIELD;
-      cy = (rng() * 2 - 1) * FIELD;
-      if (deposits.every((d) => Math.hypot(d.x - cx, d.y - cy) >= MIN_CENTER_GAP)) {
-        placed = true;
-        break;
+    let gap = MIN_CENTER_GAP;
+    const rounds = guaranteed ? 3 : 1;
+    for (let round = 0; round < rounds && !placed; round++) {
+      for (let attempt = 0; attempt < PLACEMENT_ATTEMPTS; attempt++) {
+        cx = (rng() * 2 - 1) * FIELD;
+        cy = (rng() * 2 - 1) * FIELD;
+        if (deposits.every((d) => Math.hypot(d.x - cx, d.y - cy) >= gap)) {
+          placed = true;
+          break;
+        }
       }
+      gap /= 2;
     }
-    if (!placed) continue;
+    if (!placed) {
+      if (!guaranteed) continue;
+      // Dernier recours : on place quand même, position déjà tirée au sort.
+    }
 
-    const resourceId = rawItemIds[Math.floor(rng() * rawItemIds.length)];
     const purity = PURITY_TABLE[Math.floor(rng() * PURITY_TABLE.length)];
-    const pinCount = rng() < 0.5 ? 1 : 2;
-    // Gisement à 2 pins → plus grand pour contenir les deux mineurs sans chevauchement.
-    const radius = (pinCount === 2 ? 280 : 200) + rng() * 80;
+    // 1 à 3 pins par gisement.
+    const roll = rng();
+    const pinCount = roll < 0.3 ? 1 : roll < 0.7 ? 2 : 3;
+    // Plus de pins ⇒ blob plus grand pour contenir tous les mineurs sans chevauchement.
+    const radius = (pinCount === 3 ? 360 : pinCount === 2 ? 280 : 200) + rng() * 80;
 
     const pins: ResourcePin[] = [];
     if (pinCount === 1) {
       pins.push({ x: cx, y: cy });
-    } else {
+    } else if (pinCount === 2) {
       // Deux pins symétriques par rapport au centre, séparés d'au moins une card Miner.
       const angle = rng() * Math.PI * 2;
       const dx = (Math.cos(angle) * PIN_SEPARATION) / 2;
       const dy = (Math.sin(angle) * PIN_SEPARATION) / 2;
       pins.push({ x: cx + dx, y: cy + dy });
       pins.push({ x: cx - dx, y: cy - dy });
+    } else {
+      // Trois pins en triangle équilatéral, côté ≥ PIN_SEPARATION.
+      const baseAngle = rng() * Math.PI * 2;
+      const r = PIN_SEPARATION / Math.sqrt(3);
+      for (let k = 0; k < 3; k++) {
+        const angle = baseAngle + (k * Math.PI * 2) / 3;
+        pins.push({ x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r });
+      }
     }
 
     deposits.push({

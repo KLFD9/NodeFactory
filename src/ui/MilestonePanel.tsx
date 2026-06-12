@@ -38,35 +38,41 @@ function MilestoneRow({
 
   if (phase === 'reached') {
     return (
-      <li className="flex items-center gap-2 text-[11px] text-zinc-500">
-        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
+      <li className="flex items-center gap-2.5 px-2 py-1 text-[11px] text-zinc-500">
+        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 font-mono text-[9px] font-bold">
           ✓
         </span>
-        <span className="truncate">{reward}</span>
+        <span className="truncate font-sans font-medium">{reward}</span>
       </li>
     );
   }
 
   if (phase === 'active') {
     return (
-      <li className="rounded-lg border border-emerald-700/40 bg-emerald-950/20 p-2.5">
-        <div className="mb-1 flex items-baseline justify-between gap-2">
-          <span className="text-[11px] font-semibold text-zinc-200">
+      <li className="relative rounded border border-emerald-500/25 bg-emerald-950/10 p-3 shadow-md">
+        {/* Coins HUD */}
+        <div className="nf-hud-corner nf-hud-corner-tl" style={{ '--hud-border-color': 'rgba(16, 185, 129, 0.4)', width: '6px', height: '6px' } as React.CSSProperties} />
+        <div className="nf-hud-corner nf-hud-corner-tr" style={{ '--hud-border-color': 'rgba(16, 185, 129, 0.4)', width: '6px', height: '6px' } as React.CSSProperties} />
+        <div className="nf-hud-corner nf-hud-corner-bl" style={{ '--hud-border-color': 'rgba(16, 185, 129, 0.4)', width: '6px', height: '6px' } as React.CSSProperties} />
+        <div className="nf-hud-corner nf-hud-corner-br" style={{ '--hud-border-color': 'rgba(16, 185, 129, 0.4)', width: '6px', height: '6px' } as React.CSSProperties} />
+
+        <div className="mb-2 flex items-baseline justify-between gap-2">
+          <span className="text-xs font-bold text-zinc-100 font-sans">
             Produis {m.target} {item}
           </span>
-          <span className="font-mono text-[10px] tabular-nums text-zinc-400">
+          <span className="font-mono text-[10px] font-bold tabular-nums text-emerald-400">
             {Math.floor(produced)}/{m.target}
           </span>
         </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-800">
+        <div className="h-1.5 w-full overflow-hidden rounded bg-zinc-900 border border-zinc-800">
           <span
-            className="block h-full rounded-full bg-emerald-500 transition-[width] duration-500"
+            className="block h-full rounded bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] transition-[width] duration-500"
             style={{ width: `${Math.round(progress * 100)}%` }}
           />
         </div>
-        <div className="mt-1.5 flex items-center gap-1 text-[10px] text-emerald-300/90">
-          <span className="text-zinc-500">Débloque</span>
-          <span className="font-medium">{reward}</span>
+        <div className="mt-2 flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-wider text-emerald-400">
+          <span className="text-zinc-500">// UNLOCKS:</span>
+          <span className="font-bold">{reward}</span>
         </div>
       </li>
     );
@@ -74,12 +80,12 @@ function MilestoneRow({
 
   // upcoming : visible mais grisé (REC-01 — on voit la suite de l'objectif).
   return (
-    <li className="flex items-center gap-2 text-[11px] text-zinc-600">
-      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-zinc-700 text-[9px]">
+    <li className="flex items-center gap-2.5 rounded border border-zinc-900 bg-zinc-950/40 px-3 py-2 text-[11px] text-zinc-500">
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-zinc-850 bg-zinc-900 text-[9px]">
         🔒
       </span>
-      <span className="truncate">{reward}</span>
-      <span className="ml-auto shrink-0 text-[10px] text-zinc-700">
+      <span className="truncate font-sans font-medium">{reward}</span>
+      <span className="ml-auto shrink-0 font-mono text-[9px] text-zinc-600">
         {m.target} {item}
       </span>
     </li>
@@ -117,29 +123,28 @@ export function MilestonePanel() {
   const hiddenCount = allDone ? 0 : Math.max(0, MILESTONES.length - activeIndex - 2);
 
   return (
-    <div className="flex flex-col gap-2.5">
-      <div>
-        <h2 className="text-sm font-bold tracking-tight text-zinc-100">Objectifs</h2>
-        <p className="text-[11px] text-zinc-500">
+    <div className="flex flex-col gap-4">
+      <div className="border-b border-zinc-900 pb-2">
+        <h2 className="text-[10px] font-mono font-bold tracking-widest text-zinc-500 uppercase">// SYSTEM_OBJECTIFS</h2>
+        <p className="mt-1 text-[11px] text-zinc-400 font-sans leading-relaxed">
           {allDone
-            ? 'Tous les paliers franchis — optimise et prestige.'
-            : 'Produis pour débloquer ton usine.'}
+            ? 'Tous les paliers franchis — simulation complétée.'
+            : 'Produis pour débloquer de nouveaux composants.'}
         </p>
       </div>
 
       {reachedList.length > 0 && (
         <details className="group">
-          <summary className="flex cursor-pointer list-none items-center gap-2 text-[11px] text-zinc-500 transition-colors hover:text-zinc-300">
-            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
+          <summary className="flex cursor-pointer list-none items-center gap-2 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 transition-colors hover:text-zinc-300">
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-[9px]">
               ✓
             </span>
             <span>
-              {reachedList.length} palier{reachedList.length > 1 ? 's' : ''} franchi
-              {reachedList.length > 1 ? 's' : ''}
+              {reachedList.length} PALIERS_FRANCHIS
             </span>
-            <span className="ml-auto text-zinc-700 transition-transform group-open:rotate-90">›</span>
+            <span className="ml-auto text-zinc-600 transition-transform group-open:rotate-90">›</span>
           </summary>
-          <ul className="mt-1.5 flex flex-col gap-1 pl-1">
+          <ul className="mt-2 flex flex-col gap-1.5 pl-1.5 border-l border-zinc-900 ml-2">
             {reachedList.map((m) => (
               <MilestoneRow
                 key={m.id}
@@ -154,7 +159,7 @@ export function MilestonePanel() {
         </details>
       )}
 
-      <ul className="flex flex-col gap-1.5">
+      <ul className="flex flex-col gap-2.5">
         {active && (
           <MilestoneRow
             m={active}
@@ -174,12 +179,12 @@ export function MilestonePanel() {
           />
         )}
         {hiddenCount > 0 && (
-          <li className="flex items-center gap-2 pl-0.5 text-[11px] text-zinc-700">
-            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-zinc-800 text-[9px]">
+          <li className="flex items-center gap-2.5 rounded border border-zinc-950 bg-zinc-950/20 px-3 py-2 text-[11px] text-zinc-650">
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-zinc-900 bg-zinc-950/40 text-[9px] font-mono">
               ?
             </span>
-            <span>
-              +{hiddenCount} palier{hiddenCount > 1 ? 's' : ''} à découvrir…
+            <span className="font-mono text-[9px] uppercase tracking-wider">
+              +{hiddenCount} PALIERS_A_DECOUVRIR…
             </span>
           </li>
         )}

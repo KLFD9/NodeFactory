@@ -1,12 +1,8 @@
 import { useFactoryStore } from '@/store/useFactoryStore';
 import { useGraphStore } from '@/store/useGraphStore';
-import {
-  buildNodeFlowMap,
-  computeMachineStatus,
-  type MachineState,
-} from '@/graph/machineStatus';
+import { computeMachineStatus, type MachineState, buildNodeFlowMapFromSummary } from '@/graph/machineStatus';
 import { computeNodeInfo } from '@/graph/nodeInfo';
-import { computePowerNetworks } from '@/graph/power';
+import { computeFactoryAndPower } from '@/graph/computeFactory';
 import { CollapsibleSection, WarningIcon } from './FactorySummaryPanel';
 
 const STATE_META: Record<
@@ -35,8 +31,8 @@ export function BottleneckPanel() {
   const selectNode = useGraphStore((s) => s.selectNode);
   if (!gameData) return null;
 
-  const flowMap = buildNodeFlowMap(nodes, edges, gameData);
-  const { poweredByNode } = computePowerNetworks(nodes, edges, gameData);
+  const { summary, poweredByNode } = computeFactoryAndPower(nodes, edges, gameData);
+  const flowMap = buildNodeFlowMapFromSummary(edges, summary);
 
   let configuredCount = 0;
   const issues = nodes.flatMap((n) => {

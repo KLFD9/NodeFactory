@@ -14,6 +14,7 @@
 
 import type { Edge } from '@xyflow/react';
 import type { GameData } from '@/data/types';
+import { ratePerMinute } from '@/data/types';
 import type { MachineNode } from '@/store/useGraphStore';
 
 const EPS = 0.001;
@@ -51,14 +52,39 @@ export interface PowerNetworksResult {
   poweredByNode: Map<string, boolean>;
 }
 
+/** Besoin en combustible d'un générateur (1 machine, à 100 %). */
+export interface FuelRequirement {
+  itemId: string;
+  ratePerMin: number;
+}
+
+/**
+ * Combustible requis par 1 machine du bâtiment générateur `buildingId`, déduit de sa recette
+ * de génération (`producedIn === buildingId` avec au moins un ingrédient). `null` si le
+ * générateur ne consomme rien (pas de recette de fuel — alors toujours considéré « alimenté »).
+ */
+export function generatorFuelRequirement(buildingId: string, game: GameData): FuelRequirement | null {
+  const recipe = game.recipes.find((r) => r.producedIn === buildingId && r.ingredients.length > 0);
+  if (!recipe) return null;
+  const ing = recipe.ingredients[0];
+  return { itemId: ing.item, ratePerMin: ratePerMinute(ing.amountPerCycle, recipe.time) };
+}
+
 /**
  * Calcule les réseaux électriques du graphe par union-find sur les arêtes
  * `sourceHandle === 'power-out'` / `targetHandle === 'power-in'`.
+ *
+ * `fedByNode` (optionnel) : pour les générateurs consommant un combustible (cf.
+ * `generatorFuelRequirement`), indique s'ils reçoivent assez de combustible (calculé en amont
+ * via `computeFactory` — flux réel). Un générateur non nourri (`fedByNode.get(id) === false`)
+ * contribue 0 MW à `totalGenMW` : pas de combustible, pas de courant. Absent de la map ou
+ * générateur sans recette de fuel → toujours considéré nourri (rétro-compatible).
  */
 export function computePowerNetworks(
   nodes: MachineNode[],
   edges: Edge[],
   game: GameData,
+  fedByNode?: Map<string, boolean>,
 ): PowerNetworksResult {
   const buildingOf = (n: MachineNode) => game.buildings.find((b) => b.id === n.data.buildingId);
 
@@ -121,7 +147,8 @@ export function computePowerNetworks(
       const building = buildingOf(node)!;
       const count = Math.max(1, node.data.count ?? 1);
       if (building.category === 'power') {
-        totalGenMW += building.powerMW * count;
+        const fed = fedByNode?.get(id) ?? true;
+        totalGenMW += fed ? building.powerMW * count : 0;
       } else {
         totalDemandMW += building.powerMW * count;
       }

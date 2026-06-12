@@ -1,5 +1,6 @@
 import { useProgressionStore } from '@/store/useProgressionStore';
 import { LONG_CLOCK_CAP_MIN } from '@/game/balance';
+import { ManufacturingIcon } from '@/ui/icons';
 
 /** Formate une durée en minutes → « 2 h 05 » / « 12 min ». */
 function fmtDuration(minutes: number): string {
@@ -29,36 +30,47 @@ export function OfflineRecapModal() {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/70 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/70 backdrop-blur-sm animate-fade-in"
       onClick={dismiss}
       data-testid="offline-recap"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="mx-4 w-full max-w-sm rounded-2xl border border-amber-500/30 bg-zinc-900 p-6 shadow-2xl shadow-amber-950/40"
-        style={{ animation: 'nf-toast-in 0.35s ease-out' }}
+        className="relative mx-4 w-full max-w-sm rounded-lg border border-zinc-800/80 bg-zinc-950/85 p-6 shadow-2xl backdrop-blur-xl nf-glow-box-orange animate-slide-up"
       >
-        <div className="mb-4 flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-xl">
-            🏭
-          </span>
+        {/* Coins HUD Industriels */}
+        <div className="nf-hud-corner nf-hud-corner-tl" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.5)' } as React.CSSProperties} />
+        <div className="nf-hud-corner nf-hud-corner-tr" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.5)' } as React.CSSProperties} />
+        <div className="nf-hud-corner nf-hud-corner-bl" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.5)' } as React.CSSProperties} />
+        <div className="nf-hud-corner nf-hud-corner-br" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.5)' } as React.CSSProperties} />
+
+        {/* Télémétrie supérieure */}
+        <div className="flex justify-between items-center text-[9px] font-mono text-zinc-500 tracking-wider mb-4 border-b border-zinc-900 pb-2">
+          <span>SYS_STATUS: ONLINE</span>
+          <span>// ENGINE_RESTORED</span>
+        </div>
+
+        <div className="mb-5 flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-orange-500/20 bg-zinc-950 text-orange-400 shadow-inner">
+            <ManufacturingIcon className="h-5 w-5 text-orange-400" />
+          </div>
           <div>
-            <h2 className="text-sm font-bold text-zinc-100">Bon retour !</h2>
-            <p className="text-[11px] text-zinc-500">
+            <h2 className="text-sm font-bold text-zinc-100 font-sans">Bon retour !</h2>
+            <p className="text-[11px] text-zinc-400 font-sans leading-relaxed">
               Votre usine a tourné pendant votre absence.
             </p>
           </div>
         </div>
 
-        <div className="mb-4 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-center">
-          <div className="font-mono text-2xl font-bold text-amber-400" data-testid="offline-recap-ap">
+        <div className="mb-5 rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-center">
+          <div className="font-mono text-2xl font-black text-orange-500 nf-glow-text-orange" data-testid="offline-recap-ap">
             +{Math.floor(recap.apGained)} AP
           </div>
-          <div className="mt-1 text-[11px] text-zinc-500">
+          <div className="mt-1 text-[11px] font-mono text-zinc-500">
             accumulés en {fmtDuration(recap.minutesCredited)}
             {capped && (
-              <span className="ml-1 text-amber-500/80" title="Les gains hors-ligne sont plafonnés à 4 heures de production.">
-                · plafond 4 h atteint
+              <span className="ml-1 text-orange-500/80 font-bold" title="Les gains hors-ligne sont plafonnés à 4 heures de production.">
+                · PLAFOND_4H
               </span>
             )}
           </div>
@@ -66,7 +78,7 @@ export function OfflineRecapModal() {
 
         <button
           onClick={dismiss}
-          className="w-full cursor-pointer rounded-xl border border-amber-500/40 bg-amber-500/10 py-2.5 text-sm font-bold text-amber-300 transition-colors hover:bg-amber-500/20"
+          className="w-full py-2.5 px-4 rounded-lg text-xs font-black tracking-widest text-zinc-950 uppercase nf-cta-btn cursor-pointer"
           data-testid="offline-recap-dismiss"
         >
           Reprendre la production
