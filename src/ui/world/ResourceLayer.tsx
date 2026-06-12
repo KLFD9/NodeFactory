@@ -7,7 +7,7 @@ import { ExtractionIcon } from '@/ui/icons';
 import { ItemIcon, itemImage } from '@/ui/assets';
 
 /** Couleur par ressource brute (fond du blob + accent du pin). Fallback ambre. */
-const RESOURCE_COLOR: Record<string, string> = {
+export const RESOURCE_COLOR: Record<string, string> = {
   'iron-ore': '#f59e0b', // ambre rouille
   'copper-ore': '#fb7185', // cuivre/rose
   limestone: '#d6c39a', // calcaire beige

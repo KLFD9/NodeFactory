@@ -18,6 +18,7 @@ import { useFactoryStore } from '@/store/useFactoryStore';
 import { useGraphStore, type MachineNode as MachineNodeType } from '@/store/useGraphStore';
 import { useWorldStore } from '@/store/useWorldStore';
 import { ResourceLayer } from './world/ResourceLayer';
+import { MiniMapDeposits } from './world/MiniMapDeposits';
 import { computeFactory } from '@/graph/computeFactory';
 import { computeNodeInfo } from '@/graph/nodeInfo';
 import { isValidGraphConnection } from '@/graph/connection';
@@ -64,7 +65,7 @@ function Flow() {
   const copySelection = useGraphStore((s) => s.copySelection);
   const paste = useGraphStore((s) => s.paste);
   const duplicateSelection = useGraphStore((s) => s.duplicateSelection);
-  const { screenToFlowPosition, fitView, setCenter } = useReactFlow();
+  const { screenToFlowPosition, fitView, setCenter, fitBounds } = useReactFlow();
   const nodeTypes = useMemo<NodeTypes>(() => ({ machine: MachineNode }), []);
   const edgeTypes = useMemo(() => ({ belt: BeltEdge, power: PowerEdge }), []);
 
@@ -315,6 +316,27 @@ function Flow() {
     }
   }, [regenerate, rawItemIds]);
 
+  // Vue d'ensemble : cadre tous les gisements ET l'usine — l'antidote au « je suis perdu ».
+  const onOverview = useCallback(() => {
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (const d of deposits) {
+      xs.push(d.x - d.radius, d.x + d.radius);
+      ys.push(d.y - d.radius, d.y + d.radius);
+    }
+    for (const n of useGraphStore.getState().nodes) {
+      xs.push(n.position.x, n.position.x + 240);
+      ys.push(n.position.y, n.position.y + 90);
+    }
+    if (xs.length === 0) return;
+    const x = Math.min(...xs);
+    const y = Math.min(...ys);
+    void fitBounds(
+      { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y },
+      { padding: 0.05, duration: 400 },
+    );
+  }, [deposits, fitBounds]);
+
   return (
     <NodeFlowContext.Provider value={nodeFlowMap}>
     <PowerContext.Provider value={poweredByNode}>
@@ -348,7 +370,15 @@ function Flow() {
         <ViewportPortal>
           <ResourceLayer />
         </ViewportPortal>
-        <Panel position="top-right">
+        <Panel position="top-right" className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={onOverview}
+            title="Cadrer tous les gisements et l'usine"
+            className="rounded-md border border-zinc-700 bg-zinc-900/90 px-2.5 py-1.5 text-xs font-medium text-zinc-200 shadow-md hover:border-sky-500 hover:text-sky-300 transition-colors"
+          >
+            🧭 Vue d'ensemble
+          </button>
           <button
             type="button"
             onClick={onRegenerate}
@@ -367,6 +397,7 @@ function Flow() {
           maskColor="transparent"
           className="react-flow__minimap"
         />
+        <MiniMapDeposits />
       </ReactFlow>
     </div>
     </PowerNetworkContext.Provider>

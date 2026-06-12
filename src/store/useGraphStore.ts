@@ -84,6 +84,14 @@ interface GraphState {
 
   /** Pose un nouveau node de bâtiment à la position donnée (drop palette). */
   addBuildingNode: (buildingId: string, position: XYPosition, category: string) => void;
+  /**
+   * Pose une machine EN AVAL d'un node source et la relie par un belt (suggestion
+   * contextuelle : « ce mineur extrait du fer → + Smelter »). Débite le coût AP.
+   */
+  addDownstreamNode: (
+    sourceId: string,
+    suggestion: { buildingId: string; recipeId: string; itemId: string },
+  ) => void;
   /** Pose un nouveau node de bâtiment et divise éventuellement une arête existante. */
   dropBuildingNode: (buildingId: string, position: XYPosition, category: string, splitEdgeId?: string | null) => void;
   /**
@@ -173,6 +181,33 @@ export const useGraphStore = create<GraphState>()(
         data: initialNodeData(buildingId, category),
       };
       return { nodes: [...state.nodes, node], selectedNodeId: id };
+    }),
+
+  addDownstreamNode: (sourceId, { buildingId, recipeId, itemId }) =>
+    set((state) => {
+      const src = state.nodes.find((n) => n.id === sourceId);
+      if (!src) return {};
+      const cost = BUILDING_COSTS[buildingId] ?? 0;
+      if (cost > 0 && !useProgressionStore.getState().spendAP(cost)) {
+        return {
+          placementDenied: { buildingId, cost, available: useProgressionStore.getState().automationPoints },
+        };
+      }
+      const id = nextId();
+      const node: MachineNode = {
+        id,
+        type: 'machine',
+        position: { x: src.position.x + 340, y: src.position.y },
+        data: { buildingId, recipeId },
+      };
+      const edge: Edge = {
+        id: `e-${sourceId}-${id}`,
+        source: sourceId,
+        sourceHandle: `out-${itemId}`,
+        target: id,
+        targetHandle: `in-${itemId}`,
+      };
+      return { nodes: [...state.nodes, node], edges: [...state.edges, edge], selectedNodeId: id };
     }),
 
   dropBuildingNode: (buildingId, position, category, splitEdgeId) =>

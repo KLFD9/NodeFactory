@@ -2,8 +2,10 @@ import { useEffect } from 'react';
 import { useFactoryStore } from '@/store/useFactoryStore';
 import { useGraphStore } from '@/store/useGraphStore';
 import { useProgressionStore } from '@/store/useProgressionStore';
-import { isRecipeUnlocked } from '@/game/progression';
+import { isBuildingUnlocked, isRecipeUnlocked } from '@/game/progression';
 import { computeNodeInfo, recipesForBuilding } from '@/graph/nodeInfo';
+import { suggestDownstream } from '@/graph/suggest';
+import { BUILDING_COSTS } from '@/game/balance';
 import { ItemIcon } from '@/ui/assets';
 import { PURITY_MULTIPLIER, type Purity } from '@/data/types';
 
@@ -17,8 +19,11 @@ export function Inspector() {
   const edges = useGraphStore((s) => s.edges);
   const updateNodeData = useGraphStore((s) => s.updateNodeData);
   const unbindMiner = useGraphStore((s) => s.unbindMiner);
+  const addDownstreamNode = useGraphStore((s) => s.addDownstreamNode);
   const duplicateSelection = useGraphStore((s) => s.duplicateSelection);
   const unlockedRecipes = useProgressionStore((s) => s.unlockedRecipes);
+  const unlockedBuildings = useProgressionStore((s) => s.unlockedBuildings);
+  const automationPoints = useProgressionStore((s) => s.automationPoints);
 
   // Bâtiment mono-recette (ex. Coal Generator) sans recette encore posée → auto-assignation
   // (filet de sécurité pour les nodes créés avant cette règle ; la pose la fait déjà).
@@ -118,6 +123,29 @@ export function Inspector() {
                 Ressource et pureté héritées du gisement. Détache le mineur pour le déplacer.
               </p>
             </div>
+            {(() => {
+              // Suggestion contextuelle : la machine qui consomme naturellement cette
+              // ressource — posée à droite et déjà reliée. Masquée si le mineur débite
+              // déjà quelque part, si le bâtiment est verrouillé, ou sans suggestion.
+              const s = suggestDownstream(node.data.resourceId, gameData);
+              const hasOutput = edges.some((e) => e.source === node.id && !e.sourceHandle?.startsWith('power'));
+              if (!s || hasOutput || !isBuildingUnlocked({ unlockedBuildings }, s.buildingId)) return null;
+              const b = gameData.buildings.find((x) => x.id === s.buildingId);
+              const cost = BUILDING_COSTS[s.buildingId] ?? 0;
+              const affordable = automationPoints >= cost;
+              return (
+                <button
+                  type="button"
+                  disabled={!affordable}
+                  onClick={() => addDownstreamNode(node.id, s)}
+                  title={affordable ? 'Pose la machine reliée à ce mineur' : `Nécessite ${cost} AP`}
+                  className="mt-2 w-full rounded-md border border-emerald-700/50 bg-emerald-950/20 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  data-testid="suggest-downstream"
+                >
+                  + {b?.name ?? s.buildingId} relié ({cost} AP)
+                </button>
+              );
+            })()}
             <button
               type="button"
               onClick={() => unbindMiner(node.id)}

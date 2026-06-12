@@ -110,7 +110,7 @@ test.describe('Accueil (premier lancement)', () => {
     await expect(welcome).toHaveCount(0);
     // Le tutoriel prend le relais, étape 1.
     await expect(page.getByTestId('tutorial-panel')).toBeVisible();
-    await expect(page.getByTestId('tutorial-panel')).toContainText('1/4');
+    await expect(page.getByTestId('tutorial-panel')).toContainText('1/5');
   });
 
   test('joueur qui revient (welcomeSeen) : pas d’écran d’accueil', async ({ page }) => {
@@ -121,24 +121,30 @@ test.describe('Accueil (premier lancement)', () => {
 });
 
 test.describe('Tutoriel (dérivé de l’état réel)', () => {
-  test('clic sur un pin de gisement → mineur posé → étape 2, puis Smelter → étape 3', async ({ page }) => {
+  test('pin → mineur → suggestion « + Smelter relié » → chaîne hors tension (étape courant)', async ({ page }) => {
     await seedWorld(page);
     await seedProgression(page, { tutorialDismissed: false });
     await gotoReady(page);
 
     const panel = page.getByTestId('tutorial-panel');
     await expect(panel).toContainText('Extrais le fer');
-    await expect(panel).toContainText('1/4');
+    await expect(panel).toContainText('1/5');
 
     // Étape 1 : le cadrage initial centre le gisement → le pin est cliquable.
     await page.locator('button[title*="Iron Ore"]').first().click();
     await expect(page.locator('.react-flow__node')).toHaveCount(1);
-    await expect(panel).toContainText('2/4');
+    await expect(panel).toContainText('2/5');
 
-    // Étape 2 : poser un Smelter.
-    await dropBuilding(page, 'smelter', 'smelting', 900, 300);
-    await expect(panel).toContainText('3/4');
-    await expect(panel).toContainText('Relie-les');
+    // Suggestion contextuelle : le mineur sélectionné propose la machine aval reliée.
+    await page.getByTestId('suggest-downstream').click();
+    await expect(page.locator('.react-flow__node')).toHaveCount(2);
+
+    // Mineur + Smelter reliés mais SANS courant → étape « Branche le courant »,
+    // et la physique suit : 2 machines hors tension, zéro production.
+    await expect(panel).toContainText('4/5');
+    await expect(panel).toContainText('Branche le courant');
+    await expect(page.getByText('⚡ 2 hors tension')).toBeVisible();
+    await expect(page.getByText('0 machines actives')).toBeVisible();
   });
 
   test('« Passer » masque le tutoriel définitivement (persiste au reload)', async ({ page }) => {
