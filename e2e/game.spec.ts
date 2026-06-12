@@ -47,18 +47,29 @@ async function seedProgression(page: Page, partial: Record<string, unknown> = {}
   );
 }
 
-/** Monde déterministe : un seul gisement de fer (1 pin) près de l'origine. */
+/** Monde déterministe : un gisement de charbon (cible du tutoriel) + un de fer. */
 async function seedWorld(page: Page) {
+  const blob = 'M -1 0 A 1 1 0 1 0 1 0 A 1 1 0 1 0 -1 0 Z';
   const deposits = [
     {
-      id: 'dep-test',
-      resourceId: 'iron-ore',
+      id: 'dep-coal',
+      resourceId: 'coal',
       purity: 'normal',
       x: 200,
       y: 200,
       radius: 220,
-      blobPath: 'M -1 0 A 1 1 0 1 0 1 0 A 1 1 0 1 0 -1 0 Z',
+      blobPath: blob,
       pins: [{ x: 200, y: 200 }],
+    },
+    {
+      id: 'dep-iron',
+      resourceId: 'iron-ore',
+      purity: 'normal',
+      x: 1100,
+      y: 200,
+      radius: 220,
+      blobPath: blob,
+      pins: [{ x: 1100, y: 200 }],
     },
   ];
   await page.addInitScript(
@@ -95,6 +106,18 @@ function paletteItem(page: Page, name: string) {
   return page.locator('[draggable="true"]').filter({ hasText: name });
 }
 
+/** Ouvre le panneau latéral Composants (la toolbar gauche est fermée par défaut). */
+async function openPalette(page: Page) {
+  await page.getByTestId('palette-toggle-btn').click();
+  await expect(page.getByTestId('left-panel')).toBeVisible();
+}
+
+/** Ouvre le panneau latéral Objectifs. */
+async function openMilestones(page: Page) {
+  await page.getByTestId('milestones-toggle-btn').click();
+  await expect(page.getByTestId('left-panel')).toBeVisible();
+}
+
 test.describe('Accueil (premier lancement)', () => {
   test('première visite : écran d’accueil, « Commencer » lance le tutoriel', async ({ page }) => {
     // AUCUN seed : profil totalement vierge.
@@ -123,29 +146,28 @@ test.describe('Accueil (premier lancement)', () => {
 });
 
 test.describe('Tutoriel (dérivé de l’état réel)', () => {
-  test('pin → mineur → suggestion « + Smelter relié » → chaîne hors tension (étape courant)', async ({ page }) => {
+  test('pin Coal → mineur → suggestion « + Coal Generator relié » → étape « Boucle le réseau »', async ({ page }) => {
     await seedWorld(page);
     await seedProgression(page, { tutorialDismissed: false });
     await gotoReady(page);
 
     const panel = page.getByTestId('tutorial-panel');
-    await expect(panel).toContainText('Extrais le fer');
-    await expect(panel).toContainText('1/5');
+    await expect(panel).toContainText('ÉLECTRICITÉ — 1/3');
+    await expect(panel).toContainText('Extrais le charbon');
 
-    // Étape 1 : le cadrage initial centre le gisement → le pin est cliquable.
-    await page.locator('button[title*="Iron Ore"]').first().click();
+    // Étape 1 : le cadrage initial centre le gisement de charbon → le pin est cliquable.
+    await page.locator('button[title*="Coal"]').first().click();
     await expect(page.locator('.react-flow__node')).toHaveCount(1);
-    await expect(panel).toContainText('2/5');
+    await expect(panel).toContainText('Pose un générateur');
 
-    // Suggestion contextuelle : le mineur sélectionné propose la machine aval reliée.
+    // Suggestion contextuelle : le mineur de charbon propose le Coal Generator relié.
     await page.getByTestId('suggest-downstream').click();
     await expect(page.locator('.react-flow__node')).toHaveCount(2);
 
-    // Mineur + Smelter reliés mais SANS courant → étape « Branche le courant »,
-    // et la physique suit : 2 machines hors tension, zéro production.
-    await expect(panel).toContainText('4/5');
-    await expect(panel).toContainText('Branche le courant');
-    await expect(page.getByText('⚡ 2 hors tension')).toBeVisible();
+    // Générateur posé + nourri (belt charbon) mais boucle électrique non câblée →
+    // étape « Boucle le réseau », et la physique suit : rien ne produit encore.
+    await expect(panel).toContainText('Boucle le réseau');
+    await expect(page.getByText(/hors tension/)).toBeVisible();
     await expect(page.getByText('0 machines actives')).toBeVisible();
   });
 
@@ -168,9 +190,12 @@ test.describe('Premier contact (Hook)', () => {
     await gotoReady(page);
 
     await expect(page.getByRole('heading', { name: /NodeFactory/ })).toBeVisible();
+    // Les panneaux gauche vivent derrière la toolbar flottante (fermés par défaut).
+    await openPalette(page);
     await expect(page.getByRole('heading', { name: 'Composants' })).toBeVisible();
     await expect(paletteItem(page, 'Miner Mk.1')).toBeVisible();
     await expect(paletteItem(page, 'Smelter')).toBeVisible();
+    await openMilestones(page);
     await expect(page.getByRole('heading', { name: 'Objectifs' })).toBeVisible();
   });
 
@@ -178,6 +203,7 @@ test.describe('Premier contact (Hook)', () => {
     await seedProgression(page);
     await gotoReady(page);
 
+    await openPalette(page);
     await expect(paletteItem(page, 'Coal Generator')).toBeVisible();
     for (const locked of ['Constructor', 'Miner Mk.2', 'Miner Mk.3', 'Assembler', 'Foundry', 'Manufacturer']) {
       await expect(paletteItem(page, locked)).toHaveCount(0);
@@ -190,13 +216,14 @@ test.describe('Objectifs (progressive disclosure)', () => {
     await seedProgression(page);
     await gotoReady(page);
 
-    const sidebar = page.locator('aside').first();
+    await openMilestones(page);
+    const sidebar = page.getByTestId('left-panel');
     // Actif : M1.
     await expect(sidebar).toContainText('Produis 60 Iron Ingot');
     // Teaser : M2 (Miner Mk.2) visible.
     await expect(sidebar).toContainText('Miner Mk.2');
     // Le reste est caché : 13 paliers − actif − teaser = 11 à découvrir.
-    await expect(sidebar).toContainText('+11 paliers à découvrir');
+    await expect(sidebar).toContainText('+11 PALIERS_A_DECOUVRIR');
     // Pas de spoil du end-game.
     await expect(sidebar).not.toContainText('Prestige');
     await expect(sidebar).not.toContainText('Automated Motor');
@@ -210,8 +237,9 @@ test.describe('Objectifs (progressive disclosure)', () => {
     });
     await gotoReady(page);
 
-    const sidebar = page.locator('aside').first();
-    await expect(sidebar).toContainText('1 palier franchi');
+    await openMilestones(page);
+    const sidebar = page.getByTestId('left-panel');
+    await expect(sidebar).toContainText('1 PALIERS_FRANCHIS');
     // L'objectif actif est passé à M2.
     await expect(sidebar).toContainText('Produis 150 Iron Rod');
   });
@@ -234,7 +262,7 @@ test.describe('Pose de bâtiments (coût AP)', () => {
 
     await dropBuilding(page, 'miner-mk1', 'extraction');
 
-    await expect(page.getByRole('alert')).toContainText('AP insuffisants');
+    await expect(page.getByRole('alert')).toContainText('AP_INSUFFICIENT');
     await expect(page.locator('.react-flow__node')).toHaveCount(0);
   });
 });
@@ -281,7 +309,7 @@ test.describe('Récap offline (idle)', () => {
     await gotoReady(page);
 
     await expect(page.getByTestId('offline-recap-ap')).toHaveText('+2400 AP');
-    await expect(page.getByTestId('offline-recap')).toContainText('plafond 4 h atteint');
+    await expect(page.getByTestId('offline-recap')).toContainText('PLAFOND_4H');
     await expect(page.getByTestId('offline-recap')).toContainText('4 h');
   });
 
@@ -305,6 +333,7 @@ test.describe('Progression (milestones)', () => {
     });
     await gotoReady(page);
 
+    await openPalette(page);
     await expect(paletteItem(page, 'Constructor')).toBeVisible();
     await expect(paletteItem(page, 'Assembler')).toHaveCount(0);
   });

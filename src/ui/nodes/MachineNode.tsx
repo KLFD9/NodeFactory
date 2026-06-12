@@ -506,28 +506,18 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
     // Determine core glow state class
     let coreGlowClass = 'nf-smelter-core-glow-nominal';
     let fanSpeed = '2.5s';
-    let tempText = 'TEMP: 1450°C';
-    let statusText = 'CORE_NOMINAL';
     if (!powered) {
       coreGlowClass = 'nf-smelter-core-glow-unpowered';
       fanSpeed = '0s'; // paused
-      tempText = 'TEMP: 20°C';
-      statusText = 'POWER_OFF';
     } else if (machineState === 'starved') {
       coreGlowClass = 'nf-smelter-core-glow-starved';
       fanSpeed = '8s'; // slow spin
-      tempText = 'TEMP: 280°C';
-      statusText = 'COLD_STANDBY';
     } else if (machineState === 'blocked') {
       coreGlowClass = 'nf-smelter-core-glow-blocked';
       fanSpeed = '0s'; // paused
-      tempText = 'TEMP: 1450°C';
-      statusText = 'CASTING_HALTED';
     } else if (machineState === 'unpowered') {
       coreGlowClass = 'nf-smelter-core-glow-unpowered';
       fanSpeed = '0s'; // paused
-      tempText = 'TEMP: 20°C';
-      statusText = 'POWER_OFF';
     }
 
     const styleVariables = {

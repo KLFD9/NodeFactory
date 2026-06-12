@@ -220,6 +220,7 @@ export function App() {
                     : 'border-zinc-800 bg-zinc-900/30 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300'
                 }`}
                 title="Objectifs de progression"
+                data-testid="milestones-toggle-btn"
               >
                 {leftPanel === 'milestones' && (
                   <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.8)] animate-pulse" />
@@ -251,6 +252,7 @@ export function App() {
             {leftPanel && (
               <div
                 className="ml-[12px] w-80 max-h-[80vh] flex flex-col rounded-lg border border-zinc-800/80 bg-zinc-950/85 p-5 shadow-2xl backdrop-blur-xl nf-glow-box-orange animate-slide-up"
+                data-testid="left-panel"
               >
                 {/* Coins HUD Industriels */}
                 <div className="nf-hud-corner nf-hud-corner-tl" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.5)' } as React.CSSProperties} />

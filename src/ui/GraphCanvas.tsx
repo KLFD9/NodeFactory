@@ -6,6 +6,7 @@ import {
   MiniMap,
   Panel,
   ReactFlow,
+  SelectionMode,
   ViewportPortal,
   useReactFlow,
   ConnectionLineType,
@@ -113,14 +114,15 @@ function Flow() {
 
   // Cadrage initial : sur un canvas vierge, le viewport (0,0) ne montre AUCUN gisement
   // (ils sont générés dans ±2600 px flow) — le nouveau joueur ne verrait qu'une grille
-  // vide. On centre une seule fois sur le gisement de fer le plus proche de l'origine :
-  // c'est la cible de la première étape du tutoriel (« clique un pin Iron Ore »).
+  // vide. On centre une seule fois sur le gisement de CHARBON le plus proche de
+  // l'origine : c'est la cible de la première étape du tutoriel (« clique un pin Coal »,
+  // l'électricité se construit avant la chaîne de fer).
   const initialCenterDone = useRef(false);
   useEffect(() => {
     if (initialCenterDone.current || deposits.length === 0) return;
     initialCenterDone.current = true;
     if (useGraphStore.getState().nodes.length > 0) return; // usine existante : fitView gère.
-    const candidates = deposits.filter((d) => d.resourceId === 'iron-ore');
+    const candidates = deposits.filter((d) => d.resourceId === 'coal');
     const pool = candidates.length > 0 ? candidates : deposits;
     const target = pool.reduce((a, b) => (Math.hypot(a.x, a.y) <= Math.hypot(b.x, b.y) ? a : b));
     void setCenter(target.x, target.y, { zoom: 0.6 });
@@ -399,7 +401,7 @@ function Flow() {
         isValidConnection={isValidConnection}
         connectionLineType={ConnectionLineType.SmoothStep}
         selectionOnDrag={true}
-        selectionMode="partial"
+        selectionMode={SelectionMode.Partial}
         panOnDrag={[2]}
         snapToGrid={true}
         snapGrid={[16, 16]}
