@@ -31,8 +31,9 @@ export function buildNodeFlowMap(
   nodes: MachineNode[],
   edges: Edge[],
   game: GameData,
+  poweredOverride?: Map<string, boolean>,
 ): NodeFlowMap {
-  const summary = computeFactory(nodes, edges, game);
+  const summary = computeFactory(nodes, edges, game, poweredOverride);
   const plans = new Map(summary.edges.map((p) => [p.edgeId, p]));
   const map: NodeFlowMap = new Map();
   const getFlow = (id: string): NodeActualFlow => {

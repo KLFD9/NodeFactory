@@ -16,14 +16,14 @@ describe('completeFactory (optimisation assistée)', () => {
   it('comble le déficit : un Constructor de plaques seul → amont ajouté, plus aucun déficit', async () => {
     // 1 Constructor Iron Plate seul : consomme 30 Iron Ingot/min, déficit 30.
     const nodes = [machine('c', 'constructor', 'iron-plate')];
-    const before = computeFactory(nodes, [], game);
+    const before = computeFactory(nodes, [], game, new Map());
     expect(before.deficits.find((d) => d.itemId === 'iron-ingot')?.ratePerMin).toBe(30);
 
     const res = await completeFactory(nodes, [], game, 'raw-resources');
     expect(res).not.toBeNull();
 
     // Après complétion : aucune production manquante, et le minerai apparaît en ressource brute.
-    const after = computeFactory(res!.nodes, res!.edges, game);
+    const after = computeFactory(res!.nodes, res!.edges, game, new Map());
     expect(after.deficits).toHaveLength(0);
     expect(after.rawInputs.find((r) => r.itemId === 'iron-ore')?.ratePerMin).toBe(30);
 

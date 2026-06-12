@@ -7,6 +7,9 @@ import { computeFactory, planBelt } from './computeFactory';
 
 const game = loadMockGameData();
 
+/** Neutralise le gating électrique — ces tests valident le bilan matière/logistique pur. */
+const NO_POWER = () => new Map<string, boolean>();
+
 const machine = (id: string, data: MachineNodeData): MachineNode => ({
   id,
   type: 'machine',
@@ -37,7 +40,7 @@ describe('computeFactory (bilan matière + énergie)', () => {
       machine('c', { buildingId: 'constructor', recipeId: 'iron-plate', count: 3 }),
       machine('s', { buildingId: 'smelter', recipeId: 'iron-ingot', count: 3 }),
     ];
-    const summary = computeFactory(nodes, [], game);
+    const summary = computeFactory(nodes, [], game, NO_POWER());
 
     expect(summary.totalMachines).toBe(6);
     expect(summary.totalPowerMW).toBe(24); // 3×4 (constructor) + 3×4 (smelter)
@@ -56,7 +59,7 @@ describe('computeFactory (bilan matière + énergie)', () => {
 
   it('machine sans amont : le manque d’intermédiaire est un déficit (pas une ressource brute)', () => {
     const nodes = [machine('c', { buildingId: 'constructor', recipeId: 'iron-plate', count: 3 })];
-    const summary = computeFactory(nodes, [], game);
+    const summary = computeFactory(nodes, [], game, NO_POWER());
     expect(summary.deficits).toEqual([
       { itemId: 'iron-ingot', itemName: 'Iron Ingot', ratePerMin: 90 },
     ]);
@@ -71,7 +74,7 @@ describe('computeFactory (bilan matière + énergie)', () => {
       { id: 'belt', source: 'miner', target: 'smelter', sourceHandle: 'out-iron-ore', targetHandle: 'in-iron-ore' },
       { id: 'power', source: 'smelter', target: 'miner', sourceHandle: 'power-out', targetHandle: 'power-in' },
     ];
-    const summary = computeFactory(nodes, edges, game);
+    const summary = computeFactory(nodes, edges, game, NO_POWER());
     const beltPlan = summary.edges.find((p) => p.edgeId === 'belt')!;
     const powerPlan = summary.edges.find((p) => p.edgeId === 'power')!;
     expect(beltPlan.itemId).toBe('iron-ore');
@@ -86,7 +89,7 @@ describe('computeFactory (bilan matière + énergie)', () => {
       machine('c', { buildingId: 'constructor', recipeId: 'iron-plate' }),
     ];
     const edges: Edge[] = [{ id: 'e1', source: 's', target: 'c' }];
-    const summary = computeFactory(nodes, edges, game);
+    const summary = computeFactory(nodes, edges, game, NO_POWER());
     const plan = summary.edges[0];
     expect(plan.itemId).toBe('iron-ingot');
     expect(plan.ratePerMin).toBe(90);
@@ -128,12 +131,63 @@ describe('computeFactory (bilan matière + énergie)', () => {
       { id: 'em', source: 'r', target: 'a', sourceHandle: 'out-main' },
       { id: 'er', source: 'r', target: 'b', sourceHandle: 'out-residue' },
     ];
-    const summary = computeFactory(nodes, edges, twoOut);
+    const summary = computeFactory(nodes, edges, twoOut, NO_POWER());
     const m = summary.edges.find((e) => e.edgeId === 'em')!;
     const rsd = summary.edges.find((e) => e.edgeId === 'er')!;
     expect(m.itemId).toBe('main');
     expect(m.ratePerMin).toBe(2); // 2/cycle, 60s → 2/min
     expect(rsd.itemId).toBe('residue');
     expect(rsd.ratePerMin).toBe(1);
+  });
+});
+
+describe('computeFactory — gating électrique (pas de courant, pas de production)', () => {
+  const chain = () => [
+    machine('miner', { buildingId: 'miner-mk1', resourceId: 'iron-ore', purity: 'normal' }),
+    machine('smelter', { buildingId: 'smelter', recipeId: 'iron-ingot' }),
+  ];
+  const belt: Edge = {
+    id: 'belt',
+    source: 'miner',
+    target: 'smelter',
+    sourceHandle: 'out-iron-ore',
+    targetHandle: 'in-iron-ore',
+  };
+
+  it('chaîne sans générateur → AUCUNE production, machines hors tension', () => {
+    const summary = computeFactory(chain(), [belt], game);
+    expect(summary.totalMachines).toBe(0);
+    expect(summary.unpoweredMachines).toBe(2);
+    expect(summary.production).toEqual([]);
+    expect(summary.rawInputs).toEqual([]);
+  });
+
+  it('chaîne câblée à un Coal Generator → production nominale', () => {
+    const nodes = [...chain(), machine('gen', { buildingId: 'coal-generator' })];
+    const edges: Edge[] = [
+      belt,
+      { id: 'p1', source: 'gen', target: 'miner', sourceHandle: 'power-out', targetHandle: 'power-in' },
+      { id: 'p2', source: 'gen', target: 'smelter', sourceHandle: 'power-out', targetHandle: 'power-in' },
+    ];
+    const summary = computeFactory(nodes, edges, game);
+    expect(summary.unpoweredMachines).toBe(0);
+    expect(summary.totalMachines).toBe(2);
+    // 60 ore/min extraits → 60 lingots... non : smelter = 30/min, surplus ore 30.
+    expect(summary.production.find((p) => p.itemId === 'iron-ingot')?.ratePerMin).toBe(30);
+  });
+
+  it('réseau en DÉFICIT (génération < demande) → tout le réseau s’arrête', () => {
+    // 20 smelters (80 MW) sur un seul Coal Generator (75 MW) → réseau en déficit.
+    const nodes = [
+      machine('s', { buildingId: 'smelter', recipeId: 'iron-ingot', count: 20 }),
+      machine('gen', { buildingId: 'coal-generator' }),
+    ];
+    const edges: Edge[] = [
+      { id: 'p', source: 'gen', target: 's', sourceHandle: 'power-out', targetHandle: 'power-in' },
+    ];
+    const summary = computeFactory(nodes, edges, game);
+    expect(summary.unpoweredMachines).toBe(20);
+    expect(summary.totalMachines).toBe(0);
+    expect(summary.production).toEqual([]);
   });
 });

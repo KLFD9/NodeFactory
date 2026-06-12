@@ -31,7 +31,9 @@ export async function completeFactory(
   objective: Objective,
   allowedAlternates?: string[],
 ): Promise<CompleteResult | null> {
-  const summary = computeFactory(nodes, edges, game);
+  // Calcul THÉORIQUE : l'assistance raisonne sur la structure de la chaîne, pas sur
+  // l'état électrique du moment (Map vide = gating neutralisé).
+  const summary = computeFactory(nodes, edges, game, new Map());
   if (summary.deficits.length === 0) return null;
 
   const demands = new Map(summary.deficits.map((d) => [d.itemId, d.ratePerMin]));

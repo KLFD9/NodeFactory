@@ -38,7 +38,7 @@ describe('buildGraphFromSolution (1 node = 1 machine + logistique)', () => {
       objective: 'raw-resources',
     });
     const { nodes, edges } = buildGraphFromSolution(result, game);
-    const plans = computeFactory(nodes, edges, game).edges;
+    const plans = computeFactory(nodes, edges, game, new Map()).edges;
 
     // 3 lingots → merger (3×30/min) + splitter → 3 plaques (3×30/min) = 6 arêtes à 30/min.
     const at30 = plans.filter((p) => p.ratePerMin === 30 && p.itemId === 'iron-ingot');

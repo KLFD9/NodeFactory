@@ -32,7 +32,9 @@ export async function evaluateEfficiency(
   game: GameData,
   allowedAlternates?: string[],
 ): Promise<EfficiencyScore | null> {
-  const summary = computeFactory(nodes, edges, game);
+  // Calcul THÉORIQUE : le score compare la STRUCTURE de l'usine à l'optimum LP ;
+  // l'alimentation électrique est un problème séparé (gating neutralisé).
+  const summary = computeFactory(nodes, edges, game, new Map());
   const isRaw = (id: string) => game.items.find((i) => i.id === id)?.raw ?? false;
 
   // Sorties finales à reproduire = surplus non bruts (ce que l'usine livre réellement).

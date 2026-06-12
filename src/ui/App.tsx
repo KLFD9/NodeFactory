@@ -75,6 +75,11 @@ function StatusBar() {
       {unconfigured > 0 && (
         <span className="text-amber-400">⚙ {unconfigured} à configurer</span>
       )}
+      {summary.unpoweredMachines > 0 && (
+        <span className="text-red-400" title="Machines sans réseau électrique alimenté : elles ne produisent rien.">
+          ⚡ {summary.unpoweredMachines} hors tension
+        </span>
+      )}
       {summary.deficits.length > 0 && (
         <span className="text-red-400">⚠ {summary.deficits.length} déficit(s)</span>
       )}

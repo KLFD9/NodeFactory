@@ -2,7 +2,7 @@ import type { Edge } from '@xyflow/react';
 import type { Belt, GameData } from '@/data/types';
 import type { MachineNode } from '@/store/useGraphStore';
 import { computeNodeInfo } from './nodeInfo';
-import { isPowerSourceHandle, isPowerTargetHandle } from './power';
+import { computePowerNetworks, isPowerSourceHandle, isPowerTargetHandle } from './power';
 
 /** Plan de convoyage pour un débit donné. */
 export interface BeltPlan {
@@ -64,6 +64,12 @@ export interface EdgePlan {
 export interface FactorySummary {
   totalMachines: number;
   totalPowerMW: number;
+  /**
+   * Machines configurées mais HORS TENSION (réseau électrique absent ou en déficit) :
+   * elles ne produisent rien et ne comptent pas dans `totalMachines`/`production`.
+   * L'électricité est une mécanique de jeu : pas de courant, pas de production.
+   */
+  unpoweredMachines: number;
   /** Items où il manque de la production (net < 0) et qui ne sont PAS bruts : vrais goulots. */
   deficits: ItemRate[];
   /** Ressources brutes à importer (net < 0 et item brut). */
@@ -90,14 +96,22 @@ const round = (n: number) => Math.round(n * 1000) / 1000;
 /**
  * Agrège le graphe : machines, énergie, bilan matière (production vs consommation),
  * et plan logistique par arête. Indépendant de React.
+ *
+ * ÉLECTRICITÉ (mécanique de jeu) : une machine dont le réseau électrique est absent
+ * ou en déficit NE PRODUIT PAS (elle est comptée dans `unpoweredMachines`). Par défaut,
+ * les réseaux sont calculés ici via `computePowerNetworks`. `poweredOverride` permet
+ * d'injecter un état (ou de neutraliser le gating avec `new Map()` — utile pour les
+ * calculs THÉORIQUES : assistance LP, score d'efficacité, tests logistiques purs).
  */
 export function computeFactory(
   nodes: MachineNode[],
   edges: Edge[],
   game: GameData,
+  poweredOverride?: Map<string, boolean>,
 ): FactorySummary {
   const itemName = (id: string) => game.items.find((i) => i.id === id)?.name ?? id;
   const isRaw = (id: string) => game.items.find((i) => i.id === id)?.raw ?? false;
+  const powered = poweredOverride ?? computePowerNetworks(nodes, edges, game).poweredByNode;
 
   const production = new Map<string, number>();
   const consumption = new Map<string, number>();
@@ -106,6 +120,7 @@ export function computeFactory(
 
   let totalMachines = 0;
   let totalPowerMW = 0;
+  let unpoweredMachines = 0;
 
   // Débit de sortie par item de chaque node (pour router les arêtes par handle).
   const nodeOutputs = new Map<string, Map<string, number>>();
@@ -116,6 +131,11 @@ export function computeFactory(
     const count = Math.max(1, node.data.count ?? 1);
 
     if (info.configured) {
+      // Hors tension : la machine existe mais ne tourne pas (zéro flux, zéro conso).
+      if (powered.get(node.id) === false && info.building.category !== 'power') {
+        unpoweredMachines += count;
+        continue;
+      }
       totalMachines += count;
       totalPowerMW += info.powerMW * count;
       for (const out of info.outputs) add(production, out.itemId, out.ratePerMin * count);
@@ -216,6 +236,7 @@ export function computeFactory(
   return {
     totalMachines,
     totalPowerMW: round(totalPowerMW),
+    unpoweredMachines,
     deficits: deficits.sort(byRate),
     rawInputs: rawInputs.sort(byRate),
     surplus: surplus.sort(byRate),

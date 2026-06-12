@@ -19,6 +19,8 @@ export interface TutorialSnapshot {
   hasSmelter: boolean;
   /** Un Smelter reçoit du minerai de fer (arête mineur → smelter). */
   smelterFed: boolean;
+  /** La chaîne est sous tension : le Smelter nourri appartient à un réseau alimenté. */
+  chainPowered: boolean;
   /** Le premier milestone (60 Iron Ingot) est franchi. */
   m1Reached: boolean;
 }
@@ -49,6 +51,12 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     detail: 'Tire un lien du rond vert du mineur vers le rond orange du Smelter.',
   },
   {
+    id: 'power',
+    title: 'Branche le courant',
+    detail:
+      'Sans électricité, rien ne tourne ! Pose un Coal Generator (15 AP) et câble son pin ⚡ vers ceux du mineur et du Smelter.',
+  },
+  {
     id: 'produce',
     title: 'Laisse tourner',
     detail: 'Ton usine produit toute seule. Objectif : 60 Iron Ingot → Constructor.',
@@ -64,5 +72,6 @@ export function currentTutorialStep(s: TutorialSnapshot): number {
   if (!s.hasIronMiner) return 0;
   if (!s.hasSmelter) return 1;
   if (!s.smelterFed) return 2;
-  return 3;
+  if (!s.chainPowered) return 3;
+  return 4;
 }

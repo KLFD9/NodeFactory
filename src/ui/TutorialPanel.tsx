@@ -3,6 +3,7 @@ import { useFactoryStore } from '@/store/useFactoryStore';
 import { useGraphStore } from '@/store/useGraphStore';
 import { useProgressionStore } from '@/store/useProgressionStore';
 import { TUTORIAL_STEPS, currentTutorialStep, type TutorialSnapshot } from '@/game/tutorial';
+import { computePowerNetworks } from '@/graph/power';
 
 /**
  * Checklist de premier lancement — guide la route la plus courte vers « ça tourne
@@ -30,10 +31,16 @@ export function TutorialPanel() {
     const smelters = nodes.filter((n) => n.data.buildingId === 'smelter');
     const minerIds = new Set(ironMiners.map((n) => n.id));
     const smelterIds = new Set(smelters.map((n) => n.id));
+    const fedSmelters = edges
+      .filter((e) => minerIds.has(e.source) && smelterIds.has(e.target))
+      .map((e) => e.target);
+    // Sous tension = un smelter NOURRI appartient à un réseau électrique alimenté.
+    const { poweredByNode } = computePowerNetworks(nodes, edges, gameData);
     const snapshot: TutorialSnapshot = {
       hasIronMiner: ironMiners.length > 0,
       hasSmelter: smelters.length > 0,
-      smelterFed: edges.some((e) => minerIds.has(e.source) && smelterIds.has(e.target)),
+      smelterFed: fedSmelters.length > 0,
+      chainPowered: fedSmelters.some((id) => poweredByNode.get(id) === true),
       m1Reached: reachedMilestones.includes('ms-iron-ingot-60'),
     };
     return currentTutorialStep(snapshot);
