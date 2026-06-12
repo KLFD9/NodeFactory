@@ -11,15 +11,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   // AP
-  AP_RATE_PER_ITEM_PER_MIN,
-  computeApRate,
+  RP_RATE_PER_ITEM_PER_MIN,
+  computeRpRate,
   // Horloges
   SHORT_CLOCK_CAP_MIN,
   LONG_CLOCK_CAP_MIN,
   LONG_CLOCK_CAP_MS,
   computeOfflineGains,
   OFFLINE_RECAP_MIN_MINUTES,
-  OFFLINE_RECAP_MIN_AP,
+  OFFLINE_RECAP_MIN_RP,
   shouldShowOfflineRecap,
   // Courbes idle
   UPGRADE_COST_RATIO,
@@ -49,41 +49,41 @@ const EPSILON = 1e-5;
 // ---------------------------------------------------------------------------
 
 describe('Monnaie méta (AP)', () => {
-  it('constante AP_RATE_PER_ITEM_PER_MIN ≈ 0.3333', () => {
-    expect(AP_RATE_PER_ITEM_PER_MIN).toBeCloseTo(1 / 3, 5);
+  it('constante RP_RATE_PER_ITEM_PER_MIN ≈ 0.3333', () => {
+    expect(RP_RATE_PER_ITEM_PER_MIN).toBeCloseTo(1 / 3, 5);
   });
 
   it('taux nominal : 30 items/min, efficacité 1.0 → 10 AP/min', () => {
     // 30 * 1.0 * (1/3) = 10.0
-    expect(computeApRate(30, 1.0)).toBeCloseTo(10.0, 5);
+    expect(computeRpRate(30, 1.0)).toBeCloseTo(10.0, 5);
   });
 
   it('taux nominal : 30 items/min, efficacité 0.5 → 5 AP/min', () => {
     // 30 * 0.5 * (1/3) = 5.0
-    expect(computeApRate(30, 0.5)).toBeCloseTo(5.0, 5);
+    expect(computeRpRate(30, 0.5)).toBeCloseTo(5.0, 5);
   });
 
   it('usine vide : 0 items/min → 0 AP/min', () => {
-    expect(computeApRate(0, 1.0)).toBe(0);
+    expect(computeRpRate(0, 1.0)).toBe(0);
   });
 
   it('efficacité nulle : → 0 AP/min', () => {
-    expect(computeApRate(30, 0)).toBe(0);
+    expect(computeRpRate(30, 0)).toBe(0);
   });
 
   it('efficacité > 1 est clampée à 1 : 30 items/min, efficacité 1.5 → 10 AP/min', () => {
     // efficacité clampée à 1.0 : 30 * 1.0 * (1/3) = 10.0
-    expect(computeApRate(30, 1.5)).toBeCloseTo(10.0, 5);
+    expect(computeRpRate(30, 1.5)).toBeCloseTo(10.0, 5);
   });
 
   it('efficacité négative → 0 AP/min', () => {
-    expect(computeApRate(30, -0.5)).toBe(0);
+    expect(computeRpRate(30, -0.5)).toBe(0);
   });
 
   it('calibration design : usine 30 Reinforced Iron Plate/min → ~10 AP/min', () => {
     // 30 items_sortie/min × 1.0 × (1/3) = 10 AP/min
     // Note : on passe le débit de sortie final (30 RIP/min), pas les intermédiaires.
-    expect(computeApRate(30, 1.0)).toBeCloseTo(10.0, 5);
+    expect(computeRpRate(30, 1.0)).toBeCloseTo(10.0, 5);
   });
 });
 
@@ -143,7 +143,7 @@ describe('computeOfflineGains', () => {
 describe('shouldShowOfflineRecap', () => {
   it('seuils : 1 min / 1 AP', () => {
     expect(OFFLINE_RECAP_MIN_MINUTES).toBe(1);
-    expect(OFFLINE_RECAP_MIN_AP).toBe(1);
+    expect(OFFLINE_RECAP_MIN_RP).toBe(1);
   });
 
   it('reload rapide (10 s, 1.6 AP) → pas de popup', () => {

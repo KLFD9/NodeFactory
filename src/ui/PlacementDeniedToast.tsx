@@ -41,10 +41,10 @@ export function PlacementDeniedToast() {
 
         <div className="min-w-0">
           <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-red-400 mb-0.5">
-            // PLACEMENT_DENIED // AP_INSUFFICIENT
+            // PLACEMENT_DENIED // BOLTS_INSUFFICIENT
           </div>
           <div className="text-zinc-300 font-sans leading-relaxed text-[11px]">
-            <span className="font-bold text-zinc-200">{name}</span> requiert <span className="text-red-400 font-mono font-bold">{denied.cost} AP</span> (solde : {Math.floor(denied.available)} AP)
+            <span className="font-bold text-zinc-200">{name}</span> requiert <span className="text-red-400 font-mono font-bold">{denied.cost} AP</span> (solde : {Math.floor(denied.available)} Bolts)
           </div>
         </div>
       </div>

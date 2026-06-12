@@ -168,9 +168,9 @@ export const useGraphStore = create<GraphState>()(
   addBuildingNode: (buildingId, position, category) =>
     set((state) => {
       const cost = BUILDING_COSTS[buildingId] ?? 0;
-      if (cost > 0 && !useProgressionStore.getState().spendAP(cost)) {
+      if (cost > 0 && !useProgressionStore.getState().spendBolts(cost)) {
         return {
-          placementDenied: { buildingId, cost, available: useProgressionStore.getState().automationPoints },
+          placementDenied: { buildingId, cost, available: useProgressionStore.getState().bolts },
         };
       }
       const id = nextId();
@@ -188,9 +188,9 @@ export const useGraphStore = create<GraphState>()(
       const src = state.nodes.find((n) => n.id === sourceId);
       if (!src) return {};
       const cost = BUILDING_COSTS[buildingId] ?? 0;
-      if (cost > 0 && !useProgressionStore.getState().spendAP(cost)) {
+      if (cost > 0 && !useProgressionStore.getState().spendBolts(cost)) {
         return {
-          placementDenied: { buildingId, cost, available: useProgressionStore.getState().automationPoints },
+          placementDenied: { buildingId, cost, available: useProgressionStore.getState().bolts },
         };
       }
       const id = nextId();
@@ -213,9 +213,9 @@ export const useGraphStore = create<GraphState>()(
   dropBuildingNode: (buildingId, position, category, splitEdgeId) =>
     set((state) => {
       const cost = BUILDING_COSTS[buildingId] ?? 0;
-      if (cost > 0 && !useProgressionStore.getState().spendAP(cost)) {
+      if (cost > 0 && !useProgressionStore.getState().spendBolts(cost)) {
         return {
-          placementDenied: { buildingId, cost, available: useProgressionStore.getState().automationPoints },
+          placementDenied: { buildingId, cost, available: useProgressionStore.getState().bolts },
         };
       }
       const id = nextId();
@@ -308,12 +308,12 @@ export const useGraphStore = create<GraphState>()(
       // Coller pose de nouvelles machines : même coût en AP qu'un placement depuis la palette
       // (sinon le copier-coller est un moyen gratuit de dupliquer des bâtiments payants).
       const totalCost = cb.nodes.reduce((sum, n) => sum + (BUILDING_COSTS[n.data.buildingId] ?? 0), 0);
-      if (totalCost > 0 && !useProgressionStore.getState().spendAP(totalCost)) {
+      if (totalCost > 0 && !useProgressionStore.getState().spendBolts(totalCost)) {
         return {
           placementDenied: {
             buildingId: cb.nodes[0].data.buildingId,
             cost: totalCost,
-            available: useProgressionStore.getState().automationPoints,
+            available: useProgressionStore.getState().bolts,
           },
         };
       }
@@ -389,9 +389,9 @@ export const useGraphStore = create<GraphState>()(
     set((state) => {
       const buildingId = 'miner-mk1';
       const cost = BUILDING_COSTS[buildingId] ?? 0;
-      if (cost > 0 && !useProgressionStore.getState().spendAP(cost)) {
+      if (cost > 0 && !useProgressionStore.getState().spendBolts(cost)) {
         return {
-          placementDenied: { buildingId, cost, available: useProgressionStore.getState().automationPoints },
+          placementDenied: { buildingId, cost, available: useProgressionStore.getState().bolts },
         };
       }
       const id = nextId();

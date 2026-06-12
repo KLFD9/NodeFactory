@@ -23,7 +23,7 @@ export function Inspector() {
   const duplicateSelection = useGraphStore((s) => s.duplicateSelection);
   const unlockedRecipes = useProgressionStore((s) => s.unlockedRecipes);
   const unlockedBuildings = useProgressionStore((s) => s.unlockedBuildings);
-  const automationPoints = useProgressionStore((s) => s.automationPoints);
+  const bolts = useProgressionStore((s) => s.bolts);
 
   // Bâtiment mono-recette (ex. Coal Generator) sans recette encore posée → auto-assignation
   // (filet de sécurité pour les nodes créés avant cette règle ; la pose la fait déjà).
@@ -132,17 +132,17 @@ export function Inspector() {
               if (!s || hasOutput || !isBuildingUnlocked({ unlockedBuildings }, s.buildingId)) return null;
               const b = gameData.buildings.find((x) => x.id === s.buildingId);
               const cost = BUILDING_COSTS[s.buildingId] ?? 0;
-              const affordable = automationPoints >= cost;
+              const affordable = bolts >= cost;
               return (
                 <button
                   type="button"
                   disabled={!affordable}
                   onClick={() => addDownstreamNode(node.id, s)}
-                  title={affordable ? 'Pose la machine reliée à ce mineur' : `Nécessite ${cost} AP`}
+                  title={affordable ? 'Pose la machine reliée à ce mineur' : `Nécessite ${cost} Bolts`}
                   className="mt-2 w-full rounded-md border border-emerald-700/50 bg-emerald-950/20 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
                   data-testid="suggest-downstream"
                 >
-                  + {b?.name ?? s.buildingId} relié ({cost} AP)
+                  + {b?.name ?? s.buildingId} relié ({cost} Bolts)
                 </button>
               );
             })()}

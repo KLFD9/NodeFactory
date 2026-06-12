@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AP_RATE_PER_ITEM_PER_MIN,
+  RP_RATE_PER_ITEM_PER_MIN,
   LONG_CLOCK_CAP_MIN,
   MILESTONES,
 } from './balance';
@@ -13,7 +13,7 @@ import {
   isRecipeUnlocked,
   milestoneProgress,
   nextMilestone,
-  trySpendAP,
+  trySpendBolts,
   type ProgressionState,
 } from './progression';
 
@@ -35,7 +35,8 @@ function freshState(overrides: Partial<ProgressionState> = {}): ProgressionState
 describe('initialProgression', () => {
   it('démarre vide, horloge calée sur nowMs', () => {
     const s = initialProgression(NOW);
-    expect(s.automationPoints).toBe(50);
+    expect(s.researchPoints).toBe(0);
+    expect(s.bolts).toBe(50);
     expect(s.cumulativeProduced).toEqual({});
     expect(s.reachedMilestones).toEqual([]);
     expect(s.unlockedBuildings).toEqual([]);
@@ -48,7 +49,7 @@ describe('initialProgression', () => {
 describe('applyProductionTick — accumulation', () => {
   it('accumule la production brute et accrue les AP au prorata de dt', () => {
     const s = freshState();
-    const { state, apGained } = applyProductionTick(s, {
+    const { state, rpGained } = applyProductionTick(s, {
       grossProduction: [{ itemId: 'iron-ingot', ratePerMin: 30 }],
       totalOutputPerMin: 30,
       efficiency: 1,
@@ -59,29 +60,29 @@ describe('applyProductionTick — accumulation', () => {
     // 30/min × 2 min = 60 lingots cumulés.
     expect(state.cumulativeProduced['iron-ingot']).toBeCloseTo(60, 6);
     // AP = 30 × 1.0 × (1/3) × 2 min = 20 AP.
-    expect(apGained).toBeCloseTo(30 * AP_RATE_PER_ITEM_PER_MIN * 2, 6);
-    expect(state.automationPoints).toBeCloseTo(50 + apGained, 6);
+    expect(rpGained).toBeCloseTo(30 * RP_RATE_PER_ITEM_PER_MIN * 2, 6);
+    expect(state.researchPoints).toBeCloseTo(0 + rpGained, 6);
     expect(state.lastSeenMs).toBe(NOW + 120_000);
   });
 
   it('dt ≤ 0 (horloge figée) : pas de gain, lastSeen actualisé', () => {
-    const s = freshState({ automationPoints: 5 });
-    const { state, apGained } = applyProductionTick(s, {
+    const s = freshState({ researchPoints: 5 });
+    const { state, rpGained } = applyProductionTick(s, {
       grossProduction: [{ itemId: 'iron-ingot', ratePerMin: 30 }],
       totalOutputPerMin: 30,
       efficiency: 1,
       dtMin: -1,
       nowMs: NOW + 1000,
     });
-    expect(apGained).toBe(0);
-    expect(state.automationPoints).toBe(5);
+    expect(rpGained).toBe(0);
+    expect(state.researchPoints).toBe(5);
     expect(state.cumulativeProduced['iron-ingot'] ?? 0).toBe(0);
     expect(state.lastSeenMs).toBe(NOW + 1000);
   });
 
   it('efficacité < 1 réduit proportionnellement le taux d’AP (jamais la production d’items)', () => {
     const s = freshState();
-    const { state, apGained } = applyProductionTick(s, {
+    const { state, rpGained } = applyProductionTick(s, {
       grossProduction: [{ itemId: 'iron-ingot', ratePerMin: 30 }],
       totalOutputPerMin: 30,
       efficiency: 0.5,
@@ -89,7 +90,7 @@ describe('applyProductionTick — accumulation', () => {
       nowMs: NOW + 60_000,
     });
     // AP réduits de moitié…
-    expect(apGained).toBeCloseTo(30 * AP_RATE_PER_ITEM_PER_MIN * 0.5, 6);
+    expect(rpGained).toBeCloseTo(30 * RP_RATE_PER_ITEM_PER_MIN * 0.5, 6);
     // …mais la production d'items reste la vérité physique (30/min × 1 min).
     expect(state.cumulativeProduced['iron-ingot']).toBeCloseTo(30, 6);
   });
@@ -157,27 +158,27 @@ describe('applyProductionTick — milestones', () => {
 
 describe('applyOfflineGains', () => {
   it('attribue les AP hors-ligne plafonnés à 4 h', () => {
-    const s = freshState({ lastApRatePerMin: 10, lastSeenMs: NOW });
+    const s = freshState({ lastRpRatePerMin: 10, lastSeenMs: NOW });
     // 5 h écoulées → plafonné à 4 h (240 min).
     const fiveHoursLater = NOW + 5 * 60 * 60 * 1000;
-    const { state, apGained, minutesCredited } = applyOfflineGains(s, fiveHoursLater);
+    const { state, rpGained, minutesCredited } = applyOfflineGains(s, fiveHoursLater);
 
-    expect(apGained).toBeCloseTo(10 * LONG_CLOCK_CAP_MIN, 6); // 10 × 240 = 2400
+    expect(rpGained).toBeCloseTo(10 * LONG_CLOCK_CAP_MIN, 6); // 10 × 240 = 2400
     expect(minutesCredited).toBeCloseTo(LONG_CLOCK_CAP_MIN, 6);
-    expect(state.automationPoints).toBeCloseTo(50 + 2400, 6);
+    expect(state.researchPoints).toBeCloseTo(0 + 2400, 6);
     expect(state.lastSeenMs).toBe(fiveHoursLater);
   });
 
   it('aucun gain si aucun taux AP connu', () => {
-    const s = freshState({ lastApRatePerMin: 0, lastSeenMs: NOW });
-    const { apGained } = applyOfflineGains(s, NOW + 60 * 60 * 1000);
-    expect(apGained).toBe(0);
+    const s = freshState({ lastRpRatePerMin: 0, lastSeenMs: NOW });
+    const { rpGained } = applyOfflineGains(s, NOW + 60 * 60 * 1000);
+    expect(rpGained).toBe(0);
   });
 
   it('aucun gain négatif si l’horloge recule', () => {
-    const s = freshState({ lastApRatePerMin: 10, lastSeenMs: NOW });
-    const { apGained } = applyOfflineGains(s, NOW - 10_000);
-    expect(apGained).toBe(0);
+    const s = freshState({ lastRpRatePerMin: 10, lastSeenMs: NOW });
+    const { rpGained } = applyOfflineGains(s, NOW - 10_000);
+    expect(rpGained).toBe(0);
   });
 });
 
@@ -235,25 +236,25 @@ describe('helpers UI', () => {
   });
 });
 
-describe('trySpendAP', () => {
+describe('trySpendBolts', () => {
   it('déduit le coût si le solde est suffisant', () => {
-    const s = freshState({ automationPoints: 50 });
-    const { state, spent } = trySpendAP(s, 10);
+    const s = freshState({ bolts: 50 });
+    const { state, spent } = trySpendBolts(s, 10);
     expect(spent).toBe(true);
-    expect(state.automationPoints).toBe(40);
+    expect(state.bolts).toBe(40);
   });
 
   it('refuse et laisse l\'état inchangé si le solde est insuffisant', () => {
-    const s = freshState({ automationPoints: 5 });
-    const { state, spent } = trySpendAP(s, 10);
+    const s = freshState({ bolts: 5 });
+    const { state, spent } = trySpendBolts(s, 10);
     expect(spent).toBe(false);
-    expect(state.automationPoints).toBe(5);
+    expect(state.bolts).toBe(5);
   });
 
   it('coût nul ou négatif : toujours accepté, état inchangé', () => {
-    const s = freshState({ automationPoints: 5 });
-    const { state, spent } = trySpendAP(s, 0);
+    const s = freshState({ bolts: 5 });
+    const { state, spent } = trySpendBolts(s, 0);
     expect(spent).toBe(true);
-    expect(state.automationPoints).toBe(5);
+    expect(state.bolts).toBe(5);
   });
 });

@@ -19,36 +19,34 @@
  */
 
 // ---------------------------------------------------------------------------
-// 1. MONNAIE MÉTA — "Automation Points" (AP)
-//    [À VALIDER avec l'humain : le nom, et AP_RATE_PER_ITEM_PER_MIN]
+// 1. MONNAIES — deux flux distincts (design progression v2, 2026-06-12) :
+//    - RP (Points de Recherche) : dérivés de la PRODUCTION réelle → arbre de connaissances.
+//    - Bolts : gagnés par les CONTRATS → pose des bâtiments + améliorations par machine.
+//    Renommage des anciens « Automation Points » : la production génère désormais des RP.
 // ---------------------------------------------------------------------------
 
 /**
- * Taux de base de génération d'Automation Points (AP) par item/min de débit.
+ * Taux de base de génération de Points de Recherche (RP) par item/min de débit.
  *
- * Calibration : une usine à 30 Reinforced Iron Plates/min (Assembler × 6, efficacité 1.0)
- * génère 30 * 1.0 * AP_RATE_PER_ITEM_PER_MIN = ~10 AP/min (confortable pour la phase Habit).
- * → AP_RATE_PER_ITEM_PER_MIN = 10 / 30 ≈ 0.333
- *
- * [À VALIDER : ratio 0.333 est une proposition — peut être ajusté ±50 % sans casser les tests
- *  tant que la formule reste cohérente.]
+ * Calibration : une usine à 30 Reinforced Iron Plates/min (efficacité 1.0)
+ * génère 30 * 1.0 * RP_RATE_PER_ITEM_PER_MIN = ~10 RP/min (confortable pour la phase Habit).
  */
-export const AP_RATE_PER_ITEM_PER_MIN = 1 / 3;
+export const RP_RATE_PER_ITEM_PER_MIN = 1 / 3;
 
 /**
- * Calcule le taux de génération d'AP/min pour une usine donnée.
+ * Calcule le taux de génération de RP/min pour une usine donnée.
  *
  * @param totalItemsPerMin  Débit total de production de tous les items (sum des outputs finaux),
  *                          en items/min. NE PAS inclure les intermédiaires pour éviter le double-
  *                          comptage — seuls les "flux de sortie" de l'usine comptent.
  * @param efficiency        Efficacité globale de l'usine, entre 0 et 1.
  *                          1.0 = toutes les machines à 100 % ; 0 = usine à l'arrêt.
- * @returns AP/min générés (≥ 0).
+ * @returns RP/min générés (≥ 0).
  */
-export function computeApRate(totalItemsPerMin: number, efficiency: number): number {
+export function computeRpRate(totalItemsPerMin: number, efficiency: number): number {
   if (totalItemsPerMin <= 0 || efficiency <= 0) return 0;
   const clampedEfficiency = Math.min(1, Math.max(0, efficiency));
-  return totalItemsPerMin * clampedEfficiency * AP_RATE_PER_ITEM_PER_MIN;
+  return totalItemsPerMin * clampedEfficiency * RP_RATE_PER_ITEM_PER_MIN;
 }
 
 // ---------------------------------------------------------------------------
@@ -69,24 +67,24 @@ export const LONG_CLOCK_CAP_MIN = 240; // 4 h = 240 min
 export const LONG_CLOCK_CAP_MS = LONG_CLOCK_CAP_MIN * 60 * 1000;
 
 /**
- * Calcule les AP gagnés en delta-time depuis `lastSeenMs` jusqu'à `nowMs`.
+ * Calcule les RP gagnés en delta-time depuis `lastSeenMs` jusqu'à `nowMs`.
  * Plafonne à LONG_CLOCK_CAP_MIN de production.
  * Résultat ≥ 0 même si l'horloge système recule (garde-fou).
  *
- * @param apPerMin          Taux AP/min au moment de la déconnexion.
+ * @param ratePerMin        Taux RP/min au moment de la déconnexion.
  * @param lastSeenMs        Timestamp (Date.now()) du dernier instant actif.
  * @param nowMs             Timestamp actuel.
  */
 export function computeOfflineGains(
-  apPerMin: number,
+  ratePerMin: number,
   lastSeenMs: number,
   nowMs: number,
 ): number {
-  if (apPerMin <= 0) return 0;
+  if (ratePerMin <= 0) return 0;
   const elapsedMs = Math.max(0, nowMs - lastSeenMs);
   const cappedMs = Math.min(elapsedMs, LONG_CLOCK_CAP_MS);
   const elapsedMin = cappedMs / 60_000;
-  return apPerMin * elapsedMin;
+  return ratePerMin * elapsedMin;
 }
 
 /**
@@ -96,16 +94,16 @@ export function computeOfflineGains(
  * [À VALIDER : 1 min / 1 AP — volontairement bas, la popup est une récompense.]
  */
 export const OFFLINE_RECAP_MIN_MINUTES = 1;
-export const OFFLINE_RECAP_MIN_AP = 1;
+export const OFFLINE_RECAP_MIN_RP = 1;
 
 /**
  * La popup récap offline doit-elle être affichée pour ces gains ?
  *
- * @param apGained         AP crédités pour la période hors-ligne.
+ * @param rpGained         RP crédités pour la période hors-ligne.
  * @param minutesCredited  Durée hors-ligne créditée (déjà plafonnée), en minutes.
  */
-export function shouldShowOfflineRecap(apGained: number, minutesCredited: number): boolean {
-  return apGained >= OFFLINE_RECAP_MIN_AP && minutesCredited >= OFFLINE_RECAP_MIN_MINUTES;
+export function shouldShowOfflineRecap(rpGained: number, minutesCredited: number): boolean {
+  return rpGained >= OFFLINE_RECAP_MIN_RP && minutesCredited >= OFFLINE_RECAP_MIN_MINUTES;
 }
 
 // ---------------------------------------------------------------------------
@@ -186,7 +184,9 @@ export const AP_GENERATOR_BASE_PROD = 1.0;
 // ---------------------------------------------------------------------------
 
 /**
- * Coût en AP pour poser UNE instance d'un bâtiment donné.
+ * Coût en BOLTS pour poser UNE instance d'un bâtiment donné.
+ * (Montants historiquement calibrés en « AP » — les valeurs restent identiques,
+ * seule la monnaie de pose a changé : Bolts = argent des contrats.)
  *
  * Justifications (temps d'attente à débit AP du palier correspondant) :
  *
@@ -237,11 +237,16 @@ export const AP_GENERATOR_BASE_PROD = 1.0;
  *  cohérence des paliers tant que l'ordre relatif est préservé.]
  */
 /**
- * Capital initial d'AP au démarrage (don de bienvenue, hors production).
+ * Capital initial de Bolts au démarrage (don de bienvenue, hors contrats).
  * Couvre exactement les 3 premières poses (miner-mk1 + smelter + coal-generator =
- * 10 + 10 + 15 = 35 AP), avec 15 AP de marge — cf. justification ci-dessus.
+ * 10 + 10 + 15 = 35 Bolts), avec 15 de marge — cf. justification ci-dessus.
+ * Les montants de BUILDING_COSTS sont désormais exprimés en BOLTS (pose = argent,
+ * RP = savoir → arbre de connaissances).
  */
-export const STARTING_AP = 50;
+export const STARTING_BOLTS = 50;
+
+/** Points de Recherche au démarrage : zéro — le premier flux vient de la production. */
+export const STARTING_RP = 0;
 
 export const BUILDING_COSTS: Record<string, number> = {
   'miner-mk1': 10,

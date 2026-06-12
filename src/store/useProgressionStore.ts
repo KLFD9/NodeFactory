@@ -4,16 +4,16 @@ import {
   applyOfflineGains,
   applyProductionTick,
   initialProgression,
-  trySpendAP,
+  trySpendBolts,
   type ProgressionState,
   type TickInput,
 } from '@/game/progression';
-import { shouldShowOfflineRecap, type MilestoneDefinition } from '@/game/balance';
+import { STARTING_BOLTS, shouldShowOfflineRecap, type MilestoneDefinition } from '@/game/balance';
 
 /** Récapitulatif des gains hors-ligne, en attente d'affichage (transitoire). */
 export interface OfflineRecap {
-  /** AP crédités pour la période hors-ligne (déjà plafonnés à 4 h). */
-  apGained: number;
+  /** RP crédités pour la période hors-ligne (déjà plafonnés à 4 h). */
+  rpGained: number;
   /** Durée hors-ligne créditée, en minutes (≤ plafond 240). */
   minutesCredited: number;
 }
@@ -37,7 +37,7 @@ interface ProgressionStore extends ProgressionState {
 
   /** Avance la progression d'un tick depuis l'usine live. */
   tick: (input: TickInput) => void;
-  /** Applique les gains hors-ligne depuis la dernière session. Renvoie les AP gagnés. */
+  /** Applique les gains hors-ligne depuis la dernière session. Renvoie les RP gagnés. */
   applyOffline: (nowMs?: number) => number;
   /** Vide la file des déblocages récents (après affichage de la notification). */
   dismissUnlocks: () => void;
@@ -47,8 +47,8 @@ interface ProgressionStore extends ProgressionState {
   markWelcomeSeen: () => void;
   /** Passe le tutoriel manuellement. */
   dismissTutorial: () => void;
-  /** Tente de dépenser `cost` AP (coût de pose). Renvoie true si débité, false si solde insuffisant. */
-  spendAP: (cost: number) => boolean;
+  /** Tente de dépenser `cost` Bolts (pose, améliorations). true si débité, false sinon. */
+  spendBolts: (cost: number) => boolean;
   /** Réinitialise toute la progression (debug / futur prestige). */
   reset: () => void;
 }
@@ -73,16 +73,16 @@ export const useProgressionStore = create<ProgressionStore>()(
         }),
 
       applyOffline: (nowMs = Date.now()) => {
-        const { state: next, apGained, minutesCredited } = applyOfflineGains(get(), nowMs);
+        const { state: next, rpGained, minutesCredited } = applyOfflineGains(get(), nowMs);
         set({
           ...next,
           // Récap visible seulement si l'absence vaut la peine d'être racontée
           // (jamais de modale pour un simple reload de quelques secondes).
-          offlineRecap: shouldShowOfflineRecap(apGained, minutesCredited)
-            ? { apGained, minutesCredited }
+          offlineRecap: shouldShowOfflineRecap(rpGained, minutesCredited)
+            ? { rpGained, minutesCredited }
             : get().offlineRecap,
         });
-        return apGained;
+        return rpGained;
       },
 
       dismissUnlocks: () => set({ recentUnlocks: [] }),
@@ -93,8 +93,8 @@ export const useProgressionStore = create<ProgressionStore>()(
 
       dismissTutorial: () => set({ tutorialDismissed: true }),
 
-      spendAP: (cost) => {
-        const { state: next, spent } = trySpendAP(get(), cost);
+      spendBolts: (cost) => {
+        const { state: next, spent } = trySpendBolts(get(), cost);
         if (spent) set(next);
         return spent;
       },
@@ -103,17 +103,32 @@ export const useProgressionStore = create<ProgressionStore>()(
     }),
     {
       name: 'nf-progression',
-      version: 1,
+      version: 2,
+      // Migration v1 → v2 (refonte monnaies) : les anciens AP deviennent des Points de
+      // Recherche (même origine : la production) ; le joueur reçoit le capital initial de
+      // Bolts pour ne pas être bloqué (sa pose historique a déjà été payée en AP).
+      migrate: (persisted, version) => {
+        const s = persisted as Record<string, unknown>;
+        if (version < 2) {
+          s.researchPoints = (s.automationPoints as number) ?? 0;
+          s.bolts = STARTING_BOLTS;
+          s.lastRpRatePerMin = (s.lastApRatePerMin as number) ?? 0;
+          delete s.automationPoints;
+          delete s.lastApRatePerMin;
+        }
+        return s as unknown as ProgressionState;
+      },
       // On ne persiste QUE l'état sérialisable, pas les actions ni recentUnlocks.
       partialize: (s): ProgressionState => ({
-        automationPoints: s.automationPoints,
+        researchPoints: s.researchPoints,
+        bolts: s.bolts,
         cumulativeProduced: s.cumulativeProduced,
         nodeCumulativeProduced: s.nodeCumulativeProduced,
         reachedMilestones: s.reachedMilestones,
         unlockedBuildings: s.unlockedBuildings,
         unlockedRecipes: s.unlockedRecipes,
         lastSeenMs: s.lastSeenMs,
-        lastApRatePerMin: s.lastApRatePerMin,
+        lastRpRatePerMin: s.lastRpRatePerMin,
         prestigeCount: s.prestigeCount,
         welcomeSeen: s.welcomeSeen,
         tutorialDismissed: s.tutorialDismissed,

@@ -11,8 +11,9 @@
 
 import {
   MILESTONES,
-  STARTING_AP,
-  computeApRate,
+  STARTING_BOLTS,
+  STARTING_RP,
+  computeRpRate,
   computeOfflineGains,
   checkNewlyReachedMilestones,
   prestigeMultiplier,
@@ -24,8 +25,10 @@ import {
 // ---------------------------------------------------------------------------
 
 export interface ProgressionState {
-  /** Solde courant d'Automation Points (AP). */
-  automationPoints: number;
+  /** Points de Recherche (RP) — dérivés de la production, dépensés dans l'arbre de connaissances. */
+  researchPoints: number;
+  /** Bolts — l'argent du jeu (contrats), dépensé en pose de bâtiments et améliorations. */
+  bolts: number;
   /** Quantité cumulée produite par item (clé = itemId) — base des milestones. */
   cumulativeProduced: Record<string, number>;
   /** Quantité cumulée produite par nœud et par item (nodeId -> itemId -> total). */
@@ -39,7 +42,7 @@ export interface ProgressionState {
   /** Timestamp (ms) du dernier instant actif — base du calcul offline. */
   lastSeenMs: number;
   /** Dernier taux AP/min observé — sert au calcul des gains offline à la reconnexion. */
-  lastApRatePerMin: number;
+  lastRpRatePerMin: number;
   /** Nombre de prestiges effectués (multiplicateur permanent). */
   prestigeCount: number;
   /** L'écran d'accueil (premier lancement) a été vu. */
@@ -51,14 +54,15 @@ export interface ProgressionState {
 /** État de départ : tout à zéro, horloge calée sur maintenant. */
 export function initialProgression(nowMs: number = Date.now()): ProgressionState {
   return {
-    automationPoints: STARTING_AP,
+    researchPoints: STARTING_RP,
+    bolts: STARTING_BOLTS,
     cumulativeProduced: {},
     nodeCumulativeProduced: {},
     reachedMilestones: [],
     unlockedBuildings: [],
     unlockedRecipes: [],
     lastSeenMs: nowMs,
-    lastApRatePerMin: 0,
+    lastRpRatePerMin: 0,
     prestigeCount: 0,
     welcomeSeen: false,
     tutorialDismissed: false,
@@ -100,8 +104,8 @@ export interface TickResult {
   state: ProgressionState;
   /** Milestones franchis pendant CE tick (pour la notification UI). */
   newlyReached: MilestoneDefinition[];
-  /** AP gagnés pendant ce tick. */
-  apGained: number;
+  /** RP gagnés pendant ce tick. */
+  rpGained: number;
 }
 
 /** Applique un débloquage à l'état (immuable, dédupliqué). */
@@ -158,17 +162,17 @@ export function applyProductionTick(state: ProgressionState, input: TickInput): 
   }
 
   // 2. Accrual d'AP (taux dérivé du débit réel × efficacité × multiplicateur de prestige).
-  const baseApRate = computeApRate(totalOutputPerMin, efficiency);
-  const apRatePerMin = baseApRate * prestigeMultiplier(state.prestigeCount);
-  const apGained = apRatePerMin * safeDtMin;
+  const baseRpRate = computeRpRate(totalOutputPerMin, efficiency);
+  const rpRatePerMin = baseRpRate * prestigeMultiplier(state.prestigeCount);
+  const rpGained = rpRatePerMin * safeDtMin;
 
   let next: ProgressionState = {
     ...state,
     cumulativeProduced,
     nodeCumulativeProduced,
-    automationPoints: state.automationPoints + apGained,
+    researchPoints: state.researchPoints + rpGained,
     lastSeenMs: nowMs,
-    lastApRatePerMin: apRatePerMin,
+    lastRpRatePerMin: rpRatePerMin,
   };
 
   // 3. Milestones nouvellement franchis → déblocages.
@@ -186,7 +190,7 @@ export function applyProductionTick(state: ProgressionState, input: TickInput): 
     next = { ...withUnlocks, reachedMilestones: reached };
   }
 
-  return { state: next, newlyReached, apGained };
+  return { state: next, newlyReached, rpGained };
 }
 
 // ---------------------------------------------------------------------------
@@ -200,13 +204,13 @@ export interface SpendResult {
 }
 
 /**
- * Tente de dépenser `cost` AP. Refuse (état inchangé, `spent: false`) si le solde est
- * insuffisant — jamais de solde négatif.
+ * Tente de dépenser `cost` Bolts (pose de bâtiments, améliorations). Refuse (état
+ * inchangé, `spent: false`) si le solde est insuffisant — jamais de solde négatif.
  */
-export function trySpendAP(state: ProgressionState, cost: number): SpendResult {
+export function trySpendBolts(state: ProgressionState, cost: number): SpendResult {
   if (cost <= 0) return { state, spent: true };
-  if (state.automationPoints < cost) return { state, spent: false };
-  return { state: { ...state, automationPoints: state.automationPoints - cost }, spent: true };
+  if (state.bolts < cost) return { state, spent: false };
+  return { state: { ...state, bolts: state.bolts - cost }, spent: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -215,24 +219,24 @@ export function trySpendAP(state: ProgressionState, cost: number): SpendResult {
 
 export interface OfflineResult {
   state: ProgressionState;
-  /** AP attribués pour la période hors-ligne (déjà plafonnés à 4 h). */
-  apGained: number;
+  /** RP attribués pour la période hors-ligne (déjà plafonnés à 4 h). */
+  rpGained: number;
   /** Durée hors-ligne réelle prise en compte, en minutes (≤ plafond). */
   minutesCredited: number;
 }
 
 /**
- * Attribue les AP accumulés hors-ligne depuis `state.lastSeenMs` jusqu'à `nowMs`,
+ * Attribue les RP accumulés hors-ligne depuis `state.lastSeenMs` jusqu'à `nowMs`,
  * en delta-time plafonné (cf. balance.computeOfflineGains). Utilise le dernier taux
- * AP/min connu (persisté). Actualise `lastSeenMs`.
+ * RP/min connu (persisté). Actualise `lastSeenMs`.
  */
 export function applyOfflineGains(state: ProgressionState, nowMs: number): OfflineResult {
-  const apGained = computeOfflineGains(state.lastApRatePerMin, state.lastSeenMs, nowMs);
+  const rpGained = computeOfflineGains(state.lastRpRatePerMin, state.lastSeenMs, nowMs);
   const minutesCredited =
-    state.lastApRatePerMin > 0 ? apGained / state.lastApRatePerMin : 0;
+    state.lastRpRatePerMin > 0 ? rpGained / state.lastRpRatePerMin : 0;
   return {
-    state: { ...state, automationPoints: state.automationPoints + apGained, lastSeenMs: nowMs },
-    apGained,
+    state: { ...state, researchPoints: state.researchPoints + rpGained, lastSeenMs: nowMs },
+    rpGained,
     minutesCredited,
   };
 }

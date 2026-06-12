@@ -13,17 +13,18 @@ const PALETTE_MIME = 'application/nodefactory-building';
 const STORAGE_KEY = 'nf-progression';
 const WORLD_KEY = 'nf-world';
 
-/** État de progression par défaut (joueur déjà accueilli, tutoriel passé). */
+/** État de progression par défaut (joueur déjà accueilli, tutoriel passé) — schéma v2. */
 function progressionState(partial: Record<string, unknown> = {}) {
   return {
-    automationPoints: 50,
+    researchPoints: 0,
+    bolts: 50,
     cumulativeProduced: {},
     nodeCumulativeProduced: {},
     reachedMilestones: [],
     unlockedBuildings: [],
     unlockedRecipes: [],
     lastSeenMs: Date.now(),
-    lastApRatePerMin: 0,
+    lastRpRatePerMin: 0,
     prestigeCount: 0,
     welcomeSeen: true,
     tutorialDismissed: true,
@@ -36,14 +37,18 @@ function progressionState(partial: Record<string, unknown> = {}) {
  * Idempotent : `addInitScript` rejoue à CHAQUE navigation (reload compris) — le
  * marqueur évite d'écraser ce que le jeu a persisté depuis (tests de persistance).
  */
-async function seedProgression(page: Page, partial: Record<string, unknown> = {}) {
+async function seedProgression(
+  page: Page,
+  partial: Record<string, unknown> = {},
+  version = 2,
+) {
   await page.addInitScript(
-    ({ key, state }) => {
+    ({ key, state, v }) => {
       if (localStorage.getItem(`${key}:seeded`)) return;
       localStorage.setItem(`${key}:seeded`, '1');
-      localStorage.setItem(key, JSON.stringify({ state, version: 1 }));
+      localStorage.setItem(key, JSON.stringify({ state, version: v }));
     },
-    { key: STORAGE_KEY, state: progressionState(partial) },
+    { key: STORAGE_KEY, state: progressionState(partial), v: version },
   );
 }
 
@@ -253,17 +258,40 @@ test.describe('Pose de bâtiments (coût AP)', () => {
     await dropBuilding(page, 'miner-mk1', 'extraction');
 
     await expect(page.locator('.react-flow__node')).toHaveCount(1);
-    await expect(page.getByText('⚡ 40 AP')).toBeVisible();
+    await expect(page.getByTestId('bolts-balance')).toHaveText('40');
   });
 
   test('solde insuffisant : pose refusée + avertissement, aucun node créé', async ({ page }) => {
-    await seedProgression(page, { automationPoints: 3 });
+    await seedProgression(page, { bolts: 3 });
     await gotoReady(page);
 
     await dropBuilding(page, 'miner-mk1', 'extraction');
 
-    await expect(page.getByRole('alert')).toContainText('AP_INSUFFICIENT');
+    await expect(page.getByRole('alert')).toContainText('BOLTS_INSUFFICIENT');
     await expect(page.locator('.react-flow__node')).toHaveCount(0);
+  });
+});
+
+test.describe('Migration des sauvegardes', () => {
+  test('save v1 (AP) → v2 : les AP deviennent des RP, capital de Bolts crédité', async ({ page }) => {
+    // Ancien schéma : une seule monnaie `automationPoints`.
+    await seedProgression(
+      page,
+      {
+        automationPoints: 777,
+        lastApRatePerMin: 0,
+        researchPoints: undefined,
+        bolts: undefined,
+        lastRpRatePerMin: undefined,
+      },
+      1,
+    );
+    await gotoReady(page);
+
+    // Il faut un node posé pour voir la StatusBar : le capital migré (50) paie le mineur (10).
+    await dropBuilding(page, 'miner-mk1', 'extraction');
+    await expect(page.getByTestId('rp-balance')).toHaveText('777');
+    await expect(page.getByTestId('bolts-balance')).toHaveText('40');
   });
 });
 
@@ -279,43 +307,43 @@ test.describe('Persistance de l’usine', () => {
     await expect(page.getByText('Données prêtes')).toBeVisible();
     // Le node restauré ET le solde débité (40 = 50 − 10) sont toujours là.
     await expect(page.locator('.react-flow__node')).toHaveCount(1);
-    await expect(page.getByText('⚡ 40 AP')).toBeVisible();
+    await expect(page.getByTestId('bolts-balance')).toHaveText('40');
   });
 });
 
 test.describe('Récap offline (idle)', () => {
-  test('30 min d’absence à 10 AP/min → popup « +300 AP », fermable', async ({ page }) => {
+  test('30 min d’absence à 10 AP/min → popup « +300 RP », fermable', async ({ page }) => {
     await seedProgression(page, {
-      automationPoints: 100,
-      lastApRatePerMin: 10,
+      researchPoints: 100,
+      lastRpRatePerMin: 10,
       lastSeenMs: Date.now() - 30 * 60_000,
     });
     await gotoReady(page);
 
     const recap = page.getByTestId('offline-recap');
     await expect(recap).toBeVisible();
-    await expect(page.getByTestId('offline-recap-ap')).toHaveText('+300 AP');
+    await expect(page.getByTestId('offline-recap-ap')).toHaveText('+300 RP');
     await expect(recap).toContainText('30 min');
 
     await page.getByTestId('offline-recap-dismiss').click();
     await expect(recap).toHaveCount(0);
   });
 
-  test('10 h d’absence → gains plafonnés à 4 h (+2400 AP) et mention du plafond', async ({ page }) => {
+  test('10 h d’absence → gains plafonnés à 4 h (+2400 RP) et mention du plafond', async ({ page }) => {
     await seedProgression(page, {
-      lastApRatePerMin: 10,
+      lastRpRatePerMin: 10,
       lastSeenMs: Date.now() - 10 * 60 * 60_000,
     });
     await gotoReady(page);
 
-    await expect(page.getByTestId('offline-recap-ap')).toHaveText('+2400 AP');
+    await expect(page.getByTestId('offline-recap-ap')).toHaveText('+2400 RP');
     await expect(page.getByTestId('offline-recap')).toContainText('PLAFOND_4H');
     await expect(page.getByTestId('offline-recap')).toContainText('4 h');
   });
 
   test('simple reload (quelques secondes) → PAS de popup', async ({ page }) => {
     await seedProgression(page, {
-      lastApRatePerMin: 10,
+      lastRpRatePerMin: 10,
       lastSeenMs: Date.now() - 5_000,
     });
     await gotoReady(page);

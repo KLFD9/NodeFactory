@@ -82,7 +82,7 @@ export function Palette() {
   const gameData = useFactoryStore((s) => s.gameData);
   // Référence stable entre les ticks (le sélecteur ne change que lors d'un déblocage).
   const unlockedBuildings = useProgressionStore((s) => s.unlockedBuildings);
-  const automationPoints = useProgressionStore((s) => s.automationPoints);
+  const bolts = useProgressionStore((s) => s.bolts);
   const [query, setQuery] = useState('');
   if (!gameData) return <p className="text-xs text-zinc-500">Chargement…</p>;
 
@@ -143,14 +143,14 @@ export function Palette() {
               <div className="flex flex-col gap-2">
                 {buildings.map((b) => {
                   const cost = BUILDING_COSTS[b.id] ?? 0;
-                  const affordable = automationPoints >= cost;
+                  const affordable = bolts >= cost;
                   const code = BUILDING_CODES[b.id] ?? 'SYS-XX';
                   return (
                   <div
                      key={b.id}
                      draggable
                      onDragStart={(e) => onDragStart(e, b)}
-                     title={cost > 0 && !affordable ? `Nécessite ${cost} AP (solde : ${Math.floor(automationPoints)})` : undefined}
+                     title={cost > 0 && !affordable ? `Nécessite ${cost} Bolts (solde : ${Math.floor(bolts)})` : undefined}
                      className={[
                        'group relative flex cursor-grab items-center gap-3 rounded border border-zinc-800/30 bg-zinc-900/25 px-3 py-2.5 nf-interactive-module active:cursor-grabbing overflow-hidden',
                        affordable ? '' : 'opacity-40',
@@ -194,7 +194,7 @@ export function Palette() {
                                ? 'text-amber-400 bg-amber-500/5 border-amber-500/20' 
                                : 'text-red-400 bg-red-500/5 border-red-500/20'
                            }`}>
-                             {cost} AP
+                             {cost} Bolts
                            </span>
                          )}
                          {b.powerMW > 0 && (

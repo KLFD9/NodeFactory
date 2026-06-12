@@ -58,13 +58,13 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'mine-coal',
     section: 'Électricité',
     title: 'Extrais le charbon',
-    detail: 'Clique un pin « Coal » sur la carte : un mineur s’y installe (10 AP).',
+    detail: 'Clique un pin « Coal » sur la carte : un mineur s’y installe (10 Bolts).',
   },
   {
     id: 'place-generator',
     section: 'Électricité',
     title: 'Pose un générateur',
-    detail: 'Glisse un Coal Generator depuis la palette et choisis sa recette charbon → électricité (15 AP).',
+    detail: 'Glisse un Coal Generator depuis la palette et choisis sa recette charbon → électricité (15 Bolts).',
   },
   {
     id: 'fuel-generator',
@@ -83,13 +83,13 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'mine-iron',
     section: 'Production de fer',
     title: 'Extrais le fer',
-    detail: 'Clique un pin « Iron Ore » sur la carte : un mineur s’y installe (10 AP).',
+    detail: 'Clique un pin « Iron Ore » sur la carte : un mineur s’y installe (10 Bolts).',
   },
   {
     id: 'smelt',
     section: 'Production de fer',
     title: 'Fonds le minerai',
-    detail: 'Glisse un Smelter depuis la palette, près du mineur (10 AP).',
+    detail: 'Glisse un Smelter depuis la palette, près du mineur (10 Bolts).',
   },
   {
     id: 'connect-iron',

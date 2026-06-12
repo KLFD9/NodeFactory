@@ -64,7 +64,7 @@ export function OfflineRecapModal() {
 
         <div className="mb-5 rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-center">
           <div className="font-mono text-2xl font-black text-orange-500 nf-glow-text-orange" data-testid="offline-recap-ap">
-            +{Math.floor(recap.apGained)} AP
+            +{Math.floor(recap.rpGained)} RP
           </div>
           <div className="mt-1 text-[11px] font-mono text-zinc-500">
             accumulés en {fmtDuration(recap.minutesCredited)}

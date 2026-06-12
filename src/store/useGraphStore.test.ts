@@ -143,7 +143,7 @@ describe('useGraphStore — liaison mineur ↔ gisement', () => {
 describe('useGraphStore — copier/coller facture les AP comme une pose (anti-duplication gratuite)', () => {
   beforeEach(() => {
     useGraphStore.setState({ nodes: [], edges: [], selectedNodeId: null, clipboard: null });
-    useProgressionStore.setState({ automationPoints: 50 });
+    useProgressionStore.setState({ bolts: 50 });
   });
 
   it('coller un Smelter copié déduit son coût (10 AP), comme une pose depuis la palette', () => {
@@ -154,7 +154,7 @@ describe('useGraphStore — copier/coller facture les AP comme une pose (anti-du
     useGraphStore.getState().paste();
 
     expect(useGraphStore.getState().nodes).toHaveLength(2);
-    expect(useProgressionStore.getState().automationPoints).toBe(40);
+    expect(useProgressionStore.getState().bolts).toBe(40);
   });
 
   it('Cmd/Ctrl+D (duplicateSelection) facture également le coût du bâtiment dupliqué', () => {
@@ -164,11 +164,11 @@ describe('useGraphStore — copier/coller facture les AP comme une pose (anti-du
     useGraphStore.getState().duplicateSelection();
 
     expect(useGraphStore.getState().nodes).toHaveLength(2);
-    expect(useProgressionStore.getState().automationPoints).toBe(35); // 50 - 15 AP (coal-generator)
+    expect(useProgressionStore.getState().bolts).toBe(35); // 50 - 15 AP (coal-generator)
   });
 
   it('AP insuffisants → le coller est refusé (aucun node ajouté, AP inchangés)', () => {
-    useProgressionStore.setState({ automationPoints: 5 });
+    useProgressionStore.setState({ bolts: 5 });
     const s = { ...node('A', 'smelter', 'iron-ingot'), selected: true };
     useGraphStore.setState({ nodes: [s], edges: [] });
 
@@ -177,7 +177,7 @@ describe('useGraphStore — copier/coller facture les AP comme une pose (anti-du
 
     expect(useGraphStore.getState().nodes).toHaveLength(1);
     expect(useGraphStore.getState().placementDenied).not.toBeNull();
-    expect(useProgressionStore.getState().automationPoints).toBe(5);
+    expect(useProgressionStore.getState().bolts).toBe(5);
   });
 
   it('coller des hubs logistiques (splitter/merger, 5 AP chacun) déduit la somme', () => {
@@ -189,6 +189,6 @@ describe('useGraphStore — copier/coller facture les AP comme une pose (anti-du
     useGraphStore.getState().paste();
 
     expect(useGraphStore.getState().nodes).toHaveLength(4);
-    expect(useProgressionStore.getState().automationPoints).toBe(40); // 50 - (5 + 5)
+    expect(useProgressionStore.getState().bolts).toBe(40); // 50 - (5 + 5)
   });
 });

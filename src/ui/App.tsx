@@ -64,17 +64,50 @@ function fmtAp(n: number): string {
   return `${(n / 1_000_000).toFixed(2)}M`;
 }
 
-/** Solde d'AP + progression vers le prochain milestone. Toujours visible. */
+/** Icône boulon hexagonal — la monnaie Bolts. */
+function BoltIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={props.className} {...props}>
+      <path d="M12 2 20.66 7v10L12 22 3.34 17V7L12 2Z" />
+      <circle cx="12" cy="12" r="3.5" />
+    </svg>
+  );
+}
+
+/** Icône fiole — les Points de Recherche. */
+function FlaskIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={props.className} {...props}>
+      <path d="M10 2v6.5L4.5 18a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 8.5V2" />
+      <path d="M8.5 2h7" />
+      <path d="M7 15h10" />
+    </svg>
+  );
+}
+
+/** Soldes Bolts + RP + progression vers le prochain milestone. Toujours visible. */
 function ProgressionStatus() {
-  const ap = useProgressionStore((s) => s.automationPoints);
+  const bolts = useProgressionStore((s) => s.bolts);
+  const rp = useProgressionStore((s) => s.researchPoints);
   // S'abonne au cumul pour recalculer la barre du prochain milestone à chaque tick.
   const progression = useProgressionStore((s) => s);
   const next = nextMilestone(progression);
 
   return (
     <div className="ml-auto flex items-center gap-3">
-      <span className="font-mono text-amber-400" title="Automation Points">
-        ⚡ {fmtAp(ap)} AP
+      <span
+        className="flex items-center gap-1 font-mono text-amber-400"
+        title="Bolts — l'argent de l'usine (contrats) : pose et améliorations"
+        data-testid="bolts-balance"
+      >
+        <BoltIcon className="h-3 w-3" /> {fmtAp(bolts)}
+      </span>
+      <span
+        className="flex items-center gap-1 font-mono text-cyan-400"
+        title="Points de Recherche — dérivés de la production : arbre de connaissances"
+        data-testid="rp-balance"
+      >
+        <FlaskIcon className="h-3 w-3" /> {fmtAp(rp)}
       </span>
       {next && (
         <span className="flex items-center gap-1.5 text-zinc-400" title={`Prochain palier : ${next.target} ${next.itemId}`}>
