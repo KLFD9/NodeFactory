@@ -1,81 +1,88 @@
-# NodeFactory — Satisfactory Factory Planner
+# NodeFactory — Construis · Automatise · Optimise
 
-Planificateur d'usines pour **Satisfactory 1.0**, web, open source, gratuit, **100% client**
-(aucun backend). On fixe une production cible (« 60 plaques de fer renforcées / minute ») et
-l'appli calcule automatiquement les machines, les recettes (y compris alternatives en minimisant
-le gaspillage), les convoyeurs, l'énergie et les matières premières — le tout dans un éditeur de
-nœuds.
+**NodeFactory est un jeu web** hybride **factory-builder + idle/automation**, open source, gratuit,
+**100 % client** (aucun backend, aucun compte). Tu poses des mineurs sur des gisements, tu relies
+machines, convoyeurs et câbles électriques dans un éditeur de nœuds, et ton usine produit en
+continu — même hors-ligne. Les paliers de production débloquent bâtiments et recettes alternatives.
 
-> **Vision : extrêmement simple pour le débutant, puissant pour l'expert.** Le débutant tape
-> « je veux X par minute » et obtient un plan complet ; l'expert bascule en mode manuel.
+> **Le différenciateur** : un vrai solveur d'optimisation linéaire (GLPK) **t'assiste**
+> (« Compléter l'usine » comble les déficits) et **te note** (score d'efficacité = à quel point ton
+> usine approche l'optimum). L'efficacité devient une mécanique de progression — ça n'existe nulle
+> part ailleurs dans le genre.
+
+Né comme planificateur Satisfactory, NodeFactory a pivoté : Satisfactory/Factorio/shapez sont des
+**inspirations de genre**, pas une spec. Items, recettes, débits = notre propre économie, conçue
+pour le feel.
+
+## Les règles du monde
+
+- **Pas de courant, pas de production** : chaque machine doit appartenir à un réseau électrique
+  alimenté (générateurs + câbles ⚡). Un réseau en déficit s'arrête entièrement.
+- **Pas de charbon, pas de courant** : les générateurs consomment du combustible réel (convoyeur
+  de charbon requis). La première usine est une boucle auto-alimentée mineur ⇄ générateur.
+- **Les convoyeurs ont une capacité** : le débit est physiquement plafonné par le tier du belt.
+- **Jamais de faux nombres** : la monnaie méta (AP) dérive du débit réel de l'usine ; les gains
+  hors-ligne sont du delta-time plafonné à 4 h. La simulation est la vérité.
 
 ## Stack
 
 Vite · React 18 · TypeScript (strict) · [React Flow](https://reactflow.dev) (`@xyflow/react`) ·
-Zustand · Tailwind CSS v4 · **glpk.js** (GLPK WASM, optimisation linéaire) · Dexie (IndexedDB) ·
-Vitest.
+Zustand · Tailwind CSS v4 · **glpk.js** (GLPK WASM, optimisation linéaire) · GSAP · Dexie ·
+Vitest · Playwright.
 
 ## Démarrer
 
 ```bash
 npm install
-npm run dev        # serveur de dev Vite
-npm run build      # build statique (dist/)
-npm run preview    # prévisualise le build
-npm run test       # suite Vitest (une fois)
-npm run test:watch # Vitest en watch
-npm run typecheck  # vérification de types
+npm run dev          # serveur de dev Vite
+npm run build        # build statique (dist/)
+npm run preview      # prévisualise le build
+npm run test         # suite Vitest (unitaires, une fois)
+npm run test:watch   # Vitest en watch
+npm run test:e2e     # suite Playwright (parcours joueur, lance Vite tout seul)
+npm run typecheck    # vérification de types
+npm run validate:data -- mock   # valide le dataset
 ```
-
-Aucune configuration, aucun compte : les données du jeu sont déjà là.
 
 ## Structure des dossiers
 
 ```
-public/data/mock/        Données mockées (fer + cuivre + béton + alternatives), au format final
+public/data/mock/        L'économie du jeu v1 (22 items, 24 recettes dont 6 alternatives)
 src/
   data/                  Schéma + frontière de chargement unique loadGameData() (lecture seule)
-  solver/                Moteur LP pur et déterministe (glpk.js) — sans dépendance UI
-  graph/                 Graphe React Flow depuis une solution + couche logistique (belts/splitters)
-  store/                 État global Zustand
-  ui/                    Composants React (panneaux, nœuds custom)
-  persistence/           Dexie + export/import JSON + partage par URL compressée
-  test/                  Helpers de test (chargement du mock, setup)
-scripts/extraction/      Pipeline d'extraction des vraies données 1.0 (préparé, non branché)
+  solver/                Moteur LP pur et déterministe (glpk.js) — sans dépendance UI ni état de jeu
+  graph/                 Calcul d'usine (flux, électricité+fuel, belts), logistique, suggestions
+  game/                  Couche jeu PURE : balance, progression, milestones, score, tutoriel
+  store/                 État Zustand (graphe + progression + monde, persistés en localStorage)
+  ui/                    Composants React (canvas, panneaux HUD, modales, nœuds custom)
+  persistence/           Dexie + export/import (partage URL : à venir)
+e2e/                     Tests Playwright du parcours joueur réel
+Docs/design/             Specs de conception et backlog gameplay
 ```
 
-## Données — mock-first
+## La boucle de jeu
 
-Le MVP tourne sur des **données mockées** au format du schéma **final**, derrière la frontière
-unique `loadGameData()`. Tout le reste de l'appli (solveur, graphe, UI) ignore d'où viennent les
-données. L'extraction des vraies données 1.0 (depuis `Docs.json`) est **préparée mais pas
-implémentée** — voir `scripts/extraction/README.md`. Le jour venu, on ne touchera qu'au chargeur.
+1. **Objectif** : un milestone dit quoi viser (« produis 60 Iron Ingot → débloque le Constructor »).
+2. **Construire** : pose les machines (coût en AP), relie convoyeurs et câbles.
+3. **Regarder tourner** : belts animés, barres de cycle, badges d'état, bilan en direct.
+4. **Accumuler** : la production réelle génère des Automation Points — y compris hors-ligne (≤ 4 h).
+5. **Optimiser** : les objectifs LP (min ressources/machines/énergie) notent ton usine.
+6. **Débloquer** : 13 milestones — bâtiments, miners Mk.2/3, recettes alternatives… puis prestige.
 
 ## Le moteur de calcul
 
-C'est un problème de **programmation linéaire** (pas un parcours d'arbre) : variables = taux
-d'exécution des recettes ; contraintes de demande + bilans matière ; objectif sélectionnable
-(min ressources brutes / machines / énergie). Le solveur est une **fonction pure et déterministe**,
-testée en isolation. La couche logistique (tiering convoyeurs, splitters/mergers) est **découplée**
-du LP et calculée sur le graphe.
+Le cœur est un problème de **programmation linéaire** (pas un parcours d'arbre) : variables = taux
+d'exécution des recettes ; contraintes de demande + bilans matière ; objectif sélectionnable.
+Le solveur est une **fonction pure et déterministe**, testée en isolation, sans état de jeu.
+La physique de l'usine (`computeFactoryAndPower`) calcule flux, réseaux électriques et combustible
+en deux passes cohérentes ; les calculs *théoriques* (assistance, score) neutralisent le gating
+électrique — le courant est le problème du joueur, pas du solveur.
 
-## État d'avancement
+## Tests
 
-- [x] Initialisation stack + structure de dossiers
-- [x] Schéma de données + `loadGameData()` + validation
-- [x] Jeu de données mocké (fer + cuivre + béton + 3 alternatives)
-- [x] Dossier d'extraction préparé (README + stub `extract.ts`)
-- [x] Éditeur de nœuds manuel (palette par catégorie, drag & drop, inspecteur, multiplicateur)
-- [x] Couche de calcul du graphe (machines, énergie, bilan matière, tiering convoyeur) + tests
-- [x] Solveur LP (glpk.js) au service de l'assistance et du score (tests 1-7)
-- [x] Splitters/mergers réels (arbres 3-voies), propagation de flux, insertion sur arête (+/drop)
-- [x] Optimisation assistée : « Compléter l'usine » (comble les déficits, greffe + branche l'amont)
-- [x] Couche jeu : progression (AP, milestones, déblocages), tick live + gains offline, panneau
-      d'objectifs + pop-up de déblocage
-- [ ] Score d'efficacité affiché · audit bottleneck · prestige · persistance graphe + partage URL
-
-> **Note** : l'auto-génération « tape X/min → usine complète » a été retirée — NodeFactory devient un
-> jeu de construction : tu poses ton usine, le solveur t'assiste (« Compléter ») et te note.
+Plus de 230 tests : unitaires (Vitest — solveur sur cas vérifiés à la main, balance, progression,
+physique d'usine, tutoriel) et bout-en-bout (Playwright — accueil, tutoriel par clics réels,
+gating de palette, pose payée en AP, récap offline, persistance au reload).
 
 ## Licence
 

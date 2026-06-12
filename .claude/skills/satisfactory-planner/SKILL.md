@@ -1,179 +1,110 @@
 ---
 name: satisfactory-planner
-description: Domain knowledge and working rules for NodeFactory — the Satisfactory 1.0 factory planner (Vite/React/TS, glpk.js LP solver, React Flow node editor). Use whenever working on this project's solver, game data, graph/logistics layer, store, UI, or persistence.
+description: Domain knowledge and working rules for NodeFactory's engine core — LP solver (glpk.js), game data, factory physics (flow/power/fuel/belts), graph & logistics, stores, persistence (Vite/React/TS, React Flow). Use whenever working on this project's solver, data, graph layer, stores, UI plumbing, or persistence.
 ---
 
-# Satisfactory Factory Planner (NodeFactory)
+# Cœur moteur de NodeFactory (ex-Satisfactory Planner)
 
-Web app, open source, gratuit, 100% client. L'utilisateur fixe une production cible
-(« 60 plaques de fer renforcées/min ») et l'appli calcule automatiquement machines,
-recettes (y compris alternatives), convoyeurs, énergie et matières premières — le tout
-dans un éditeur de nœuds React Flow.
+Web app, open source, gratuite, 100 % client. **NodeFactory est un JEU** factory-builder +
+idle/automation : le joueur construit son usine dans un éditeur de nœuds React Flow ; le moteur
+calcule flux, électricité, combustible, convoyeurs et bilans — et le solveur LP l'assiste et le note.
 
-> **NodeFactory est aussi devenu un jeu.** Le planner d'optimisation s'est mué en hybride
-> **factory-builder + idle/automation web** : la couche jeu (milestones, déblocages, idle/offline,
-> prestige, score d'efficacité) se construit **par-dessus** ce cœur planner, sans jamais le corrompre.
-> Ce skill porte le **cœur planner** (solveur, données, graphe, store, persistance). Pour tout ce qui
-> touche au **gameplay / progression / longévité / équilibrage**, charge le skill **`game-design`** —
-> et respecte son découplage : `game` lit `solver`/`data`, jamais l'inverse ; le solveur reste un LP
-> pur sans état de jeu.
+> Ce skill porte le **cœur moteur** (solveur, données, graphe/physique d'usine, stores,
+> persistance). Pour le **gameplay / progression / longévité / équilibrage**, charge le skill
+> **`game-design`** — et respecte son découplage : `game` lit `solver`/`data`/`graph`, jamais
+> l'inverse ; le solveur reste un LP pur sans état de jeu.
 
 ## Vision produit (non négociable)
-**Extrêmement simple pour le débutant, puissant pour l'expert.** DEUX modes co-égaux, **un seul
-solveur LP** derrière les deux :
-- **Mode auto (débutant)** : tape « X par minute » → l'appli pose tout le schéma seule (plan complet,
-  zéro jargon, zéro config, zéro fichier).
-- **Mode assisté (expert)** : l'utilisateur a déjà commencé son graphe (ex. extracteur → split → 2
-  fonderies → merge → plaques de fer) et veut le pousser plus loin (ajouter un fabricateur pour des
-  plaques renforcées). Il peut éditer à la main **ou** demander à l'appli d'optimiser son graphe existant.
-  - Mécanique LP : les nodes déjà posés deviennent des **contraintes fixées** (recettes forcées,
-    machines imposées = bornes) ; le LP optimise *le reste* pour atteindre la cible en minimisant le
-    gaspillage. « Aide-moi à optimiser » = relancer le LP avec ces choix forcés et montrer le delta
-    (moins de minerai / machines / énergie).
-- Minimalisme visuel : progressive disclosure, la puissance est cachée derrière un mode avancé.
-- Zéro friction : pas de compte, pas d'installation, la donnée du jeu est déjà là.
-- Arbitrage par défaut : si une feature rend l'appli plus puissante mais plus intimidante au
-  premier contact, choisir le contact simple et planquer la puissance.
-
-**Séquencement** : implémenter d'abord le solveur + auto-génération (validés sur cas connus), PUIS
-poser l'édition manuelle et l'optimisation assistée *par-dessus le même solveur* (le brief rangeait
-l'édition manuelle en v2 ; la vision affinée la fait remonter dans le MVP comme second mode, mais on
-ne la construit qu'une fois le moteur vérifié).
+**Extrêmement simple pour le débutant, puissant pour l'expert.** Un seul solveur LP, deux usages :
+- **Le joueur CONSTRUIT.** L'auto-génération « tape X/min → usine posée d'un coup » a été
+  **retirée définitivement** (2026-06-09) : elle court-circuitait le plaisir de construire.
+- **Le LP assiste et note** : « Compléter l'usine » (`src/graph/assist.ts` : lit les déficits,
+  `solveDemands` calcule l'amont, `buildGraphFromSolution` le greffe, `connectFlow` le branche)
+  et **score d'efficacité** (`src/game/score.ts` : 3 solves LP vs usine réelle → 3 dimensions).
+  Il n'utilise que les alternatives **débloquées** (`allowedAlternates`).
+- Progressive disclosure partout ; zéro friction (pas de compte, données embarquées).
 
 ## Stack imposée (ne pas dévier)
-Vite + React 18 + TypeScript (SPA statique) · React Flow `@xyflow/react` · Zustand ·
-Tailwind CSS · **glpk.js** (GLPK WASM) pour le LP · Dexie (IndexedDB).
-**Pas de backend, pas de DB serveur, pas de Next.js.** Tout tourne dans le navigateur.
-Déployable sur Cloudflare Pages / Vercel / GitHub Pages.
+Vite + React 18 + TypeScript strict (SPA statique) · React Flow `@xyflow/react` · Zustand ·
+Tailwind CSS v4 · **glpk.js** (GLPK WASM) · GSAP (animations UI) · Dexie · Vitest · Playwright.
+**Pas de backend, pas de DB serveur, pas de Next.js.** Alias `@` → `src/`.
 
 ## Architecture (découplage strict)
-- `src/data` — chargement + typage des données du jeu (lecture seule). Frontière unique
-  `loadGameData()` qui renvoie des objets typés. **Tout le reste ignore d'où viennent les données.**
-- `src/solver` — moteur LP **pur, déterministe, sans dépendance React**. Testable en isolation.
-- `src/graph` — construction du graphe React Flow depuis une solution + couche logistique.
-- `src/store` — état Zustand.
-- `src/ui` — composants React, nœuds custom React Flow, panneaux.
-- `src/persistence` — Dexie + export/import JSON + état → URL compressée pour le partage.
+- `src/data` — schéma + frontière unique `loadGameData()` + `validate.ts` (lecture seule).
+- `src/solver` — moteur LP **pur, déterministe, sans dépendance React ni état de jeu**.
+- `src/graph` — physique d'usine et logistique :
+  - `computeFactory.ts` : `computeFactoryAndPower` (bilan + réseaux + fuel, 2 passes), `planBelt`.
+  - `power.ts` : réseaux électriques (union-find sur câbles `power-out`/`power-in`).
+  - `machineStatus.ts` : flux réels par node + états (nominal/starved/blocked/unpowered).
+  - `logistics.ts`, `connection.ts`, `buildGraphFromSolution.ts`, `assist.ts`, `suggest.ts`,
+    `layout.ts` (ELK), `nodeInfo.ts`.
+- `src/game` — couche jeu PURE (voir skill `game-design`).
+- `src/store` — Zustand : `useGraphStore` (nodes/edges, **persisté** `nf-graph`, ids recalés au
+  rehydrate via `syncNodeCounter`), `useProgressionStore` (`nf-progression`), `useWorldStore`
+  (gisements, `nf-world`), `useFactoryStore` (chargement des données).
+- `src/ui` — composants React (HUD industriel, toolbar gauche OBJ/COMP, modales). **Aucune
+  logique métier.**
+- `src/persistence` — Dexie + export/import. Partage URL : à venir.
+- `e2e/` — Playwright (parcours joueur ; seeds localStorage **idempotents**, format
+  zustand/persist `{state, version}`).
 
-**Pas de logique métier dans les composants React.** Le solveur ne dépend jamais de l'UI.
+## Physique d'usine (mécaniques actées — ne pas casser)
+- **Pas de courant, pas de production** : machines des réseaux absents/en déficit coupées
+  (`unpoweredMachines`), zéro flux, zéro conso.
+- **Pas de charbon, pas de courant** : générateur non nourri (belt `in-coal`, débit ≥ requis)
+  = 0 MW. Calcul en **2 passes** : pass 1 suppose les générateurs nourris → flux réel → pass 2
+  valide. La boucle de démarrage mineur-coal ⇄ générateur converge ; pas de boucle
+  énergie→fuel→énergie au-delà.
+- **Belts plafonnés** : débit d'arête limité à la capacité du meilleur tier disponible.
+- **Calculs THÉORIQUES** (assist, score, tests logistiques purs) : neutraliser le gating
+  électrique via `computeFactory(nodes, edges, game, new Map())`. Convention à conserver.
+- **Modèle de graphe : 1 node = 1 machine** ; mergers/splitters réels (hubs 3-voies) ; handles
+  par item (`out-<item>`/`in-<item>`) + pins énergie (`power-in`/`power-out`) ; propagation de
+  flux à travers les hubs. Clic-sur-pin de gisement = mineur lié posé (coût AP).
 
-## Données — approche mock-first
-MVP = données **mockées** au format du schéma **final** (pas un raccourci jetable, même forme
-que les vraies données). Le jour où l'extraction produit le vrai JSON, il remplace le mock
-**sans changer une ligne de type** — on ne touche qu'au chargeur.
+## Données — l'économie de NOTRE jeu
+`public/data/mock/` n'est PAS un placeholder : c'est la **v1 de notre économie** (22 items,
+24 recettes dont 6 alternatives, 13 bâtiments, 6 tiers de belts), à faire évoluer **pour le
+feel** (agent `game-balance`). Schéma : recette = `id`, `name`, `alternate`, `time` (s),
+`producedIn`, `ingredients[]`/`products[]` ({item, amountPerCycle}) ; débit/min =
+`amountPerCycle * 60 / time`. Électricité : recette `coal-generator-power` (coal → electricity).
 
-Mock dans `/public/data/mock/` : `recipes.json`, `items.json`, `buildings.json`, `belts.json`,
-`generators.json`. Sous-ensemble cohérent vérifiable à la main : chaîne fer complète
-(minerai → lingot → plaque/tige → vis → plaque de fer renforcée → cadre modulaire), cuivre
-(minerai → lingot → fil → câble), béton. **2-3 recettes alternatives** (Cast Screw, Bolted Iron
-Plate, Iron Wire) pour donner de vrais arbitrages au solveur. Valeurs correctes = elles valident
-les tests.
+**Toute alternative doit gagner sur ≥ 1 objectif LP et perdre sur ≥ 1 autre — valider la
+non-dominance PAR DES TESTS LP** (leçon T5 : la spec papier s'était trompée, ore→ingot est 1:1
+sans perte). `npm run validate:data -- mock` après toute modif de données.
 
-Extraction réelle : **préparée mais PAS branchée**. `/scripts/extraction/` = README (sources :
-`Docs.json` du jeu le plus fiable, wiki satisfactory.wiki.gg, sheets communautaires ; cible =
-même schéma normalisé, versionné par patch dans `/public/data/{version}/`) + stub `extract.ts`
-commenté non implémenté (signature + étapes parser→normaliser→valider→écrire + TODO).
-**Ne pas parser Docs.json maintenant.**
-
-**Agent dédié `satisfactory-data`** (`.claude/agents/`) : récupère/recoupe les vraies données depuis
-les sources autoritatives et écrit du JSON versionné dans `/public/data/{version}/`. Garde-fous :
-source canonique = `Docs.json` (le wiki en recoupement, ≥ 2 sources sinon « à vérifier ») ; il écrit
-UNIQUEMENT dans `/public/data/{version}/`, jamais le solveur/UI/schéma ; **porte de vérification
-obligatoire** `npm run validate:data -- <version>` (réutilise `validateGameData`). Le défaut reste
-`mock` tant qu'une version réelle n'est pas validée ET relue — changer `GAME_DATA_VERSION` est une
-décision humaine. L'agent prépare les données en parallèle sans rien casser ni bloquer le MVP.
-
-### Schéma (référence)
-Recette : `id`, `name`, `alternate` (bool), `time` (s), `producedIn` (bâtiment),
-`ingredients[]` ({item, amountPerCycle}), `products[]` ({item, amountPerCycle}).
-Débit/min = `amountPerCycle * 60 / time`.
-
-Tables connues (valeurs 1.0 à vérifier) :
-- Convoyeurs (items/min) : Mk1=60, Mk2=120, Mk3=270, Mk4=480, Mk5=780, Mk6=1200.
-- Énergie machines (MW) : Smelter 4, Constructor 4, Foundry 16, Assembler 15, Manufacturer 55,
-  Refinery 30, Oil Extractor 40, Miner Mk1/2/3 = 5/12/30.
-- Pureté nœud : Impure ×0.5, Normal ×1, Pure ×2.
+Données Satisfactory réelles = **inspiration optionnelle** (agent `satisfactory-data`,
+`/public/data/{version}/`, jamais le défaut sans décision humaine). Ne pas parser `Docs.json`.
 
 ## Le cœur : moteur LP (glpk.js)
-**C'est un problème de programmation linéaire, pas un parcours d'arbre.** C'est ce qui distingue
-l'outil des calculateurs Excel naïfs.
+**Un problème de programmation linéaire, pas un parcours d'arbre.**
 - Variables : taux d'exécution de chaque recette candidate.
-- Contrainte de demande : production nette de l'item cible ≥ quantité demandée.
-- Bilans : pour chaque item intermédiaire, production ≥ consommation.
-- Objectif (sélectionnable) : min ressources brutes (défaut) | min machines | min énergie.
-- Recettes alternatives = colonnes supplémentaires, activables globalement/individuellement.
+- Contraintes : demande (production nette cible ≥ quantité) + bilans matière (prod ≥ conso).
+- Objectif sélectionnable : min ressources brutes | min machines | min énergie.
+- Alternatives = colonnes supplémentaires, filtrées par `allowedAlternates` (= déblocages).
+- Après résolution : machines = `ceil(taux_requis / taux_machine)` ; énergie = Σ machines × MW.
+- La logistique reste HORS du LP (pas de coût de belts dans le LP).
 
-Après résolution : machines = `ceil(taux_requis / taux_machine)` ; énergie = Σ machines ×
-conso unitaire.
+## Tests (priorité absolue)
+Aucune fonctionnalité du moteur sans test sur cas à réponse connue, AVANT ou PENDANT le code.
+État : **~220 tests Vitest + 15 E2E Playwright**. Couverture : solveur (7 cas canoniques + éco
+v1 + non-dominance des alts), physique (bilan, gating électrique, fuel, belts), logistique
+(tiering, hubs), balance/progression/tutoriel/score, données. E2E : accueil, tutoriel par clics
+réels, gating palette, pose payée AP, récap offline, persistance au reload.
+Reste à couvrir : partage URL (test 12 du plan d'origine).
 
-**Couche logistique découplée du LP** (calculée sur le graphe au MVP, pas dans le LP) :
-par arête débit→tier de convoyeur minimal ; si > 1200/min insérer splitter et paralléliser sur
-`ceil(débit/1200)` lignes ; mergers pour regrouper ; colorer les arêtes par tier ; signaler
-surcharge. **Ne pas mettre le coût des belts dans le LP au MVP (v2).**
-
-Avant d'écrire le solveur : **analyser l'API glpk.js et proposer la formulation LP au user pour
-validation**, puis implémenter.
-
-## Tests (Vitest — dès le départ, priorité absolue)
-Aucune fonctionnalité du solveur n'est terminée sans son test. Écrire le test en même temps que
-(ou avant) le code, sur les cas dont on connaît la réponse à la main.
-
-Solveur : (1) mono-machine 30 lingots/min→1 Smelter ; (2) chaîne 2 étages 60 plaques→3 Constructors
-+ Smelters amont ; (3) choix recette alternative selon objectif ; (4) changement d'objectif donne
-solutions différentes ; (5) conservation matière (prod≥conso à epsilon) ; (6) sous-produits jamais
-ignorés ; (7) infaisabilité → erreur explicite, pas de crash.
-Logistique : (8) tiering (60→Mk1, 61→Mk2, 1200→Mk6, 1500→2 lignes Mk6+splitter) ; (9) splitter
-(Σ sorties = entrée) ; (10) merger (Σ entrées = sortie, détection surcharge).
-Persistance : (11) round-trip save→load identique ; (12) partage URL identique.
-Données : (13) tout item/producedIn référencé existe, aucun débit négatif, aucune recette sans produit.
-
-## Périmètre — MVP vs v2
-**MVP maintenant** : données mockées · extraction préparée non implémentée · solveur LP 3 objectifs
-+ toggle alternatives · génération graphe + tiering + splitters/mergers auto · saisie cible ultra-simple ·
-panneau résultats (machines, énergie, ressources brutes) · persistance locale + partage URL · tests verts.
-
-**v2+ (NE PAS commencer)** : extraction/intégration vraies données 1.0 · données complètes (fluides,
-nucléaire, sloops) · overclock/power shards/somersloops · coût logistique dans le LP · suggestion de
-patterns de build (manifold vs load-balanced, bus, footprint) — la feature différenciante mais après
-un MVP solide · mode édition manuelle avancée.
-
-**Idées à garder (backlog)** :
-- *Suggestions contextuelles de connexion* : quand l'utilisateur tire une arête depuis un node existant
-  (ou pose un node), proposer les bâtiments/recettes **pertinents par rapport au graphe** — typiquement
-  ceux qui consomment l'item produit par le node source (ex. node Smelter→Iron Ingot ⇒ proposer Iron
-  Plate / Iron Rod / Cast Screw…). Réduit la friction du mode manuel sans imposer de jargon. Réutilise
-  `computeNodeInfo` (sorties du node) + un index « item → recettes qui le consomment ».
-- *Améliorations React Flow* (issues d'une recherche dédiée, par priorité) :
-  - **Fait** : handles carrés par item (`out-<item>`/`in-<item>`), routage des arêtes par handle +
-    **propagation de flux** dans `computeFactory` (merger/splitter), flèches `markerEnd`, MiniMap,
-    lazy-load glpk **et ELK**, **copié-collé** (`src/store` : Cmd/Ctrl+C/V/D + bouton Dupliquer),
-    **`isValidConnection`** (`src/graph/connection.ts`, pur + testé), **auto-layout ELK**
-    (`src/graph/layout.ts`, `layered`/RIGHT, branché dans l'auto-génération), splitter/merger en
-    **carré compact**.
-  - **Fait (suite)** : arête custom **`BeltEdge`** (`src/ui/edges/`, label HTML + bouton **+** au survol
-    → context-box « Insérer Splitter/Merger », coupe l'arête) ; **drop palette sur une arête** =
-    division auto (`dropBuildingNode(…, splitEdgeId)`, détecté via `domAttributes` `data-edge-id` +
-    `elementFromPoint`) ; **multi-sélection** clic-gauche glissé (`selectionOnDrag` + `panOnDrag=[1,2]`).
-    Splitter/merger = vrais hubs 3-voies (1→3 / 3→1), handles sur 3 faces.
-  - **Effort moyen (reste)** : `NodeToolbar` ; titre du node = item produit + icône (façon
-    satisfactory-calculator) ; icônes d'item dans le label d'arête.
-  - **Plus tard** : helper lines au drag ; cross-highlight récap↔node.
-  - ⚠️ *Latent* : déposer une **machine** (pas un hub) sur une arête la branche sur `in-0/out-0`
-    génériques ; une fois la recette choisie, les handles deviennent `in-<item>/out-<item>` et ces
-    arêtes pendouillent. Le drop-sur-arête est pensé pour les **hubs logistiques** ; garde-fou possible
-    (n'autoriser la division qu'en catégorie `logistics`).
-  - *Représentation N machines* : tension entre node agrégé (×N, un belt = total) et fidélité physique
-    (1 node = 1 machine, belts + splitters/mergers réels). La fidélité complète (manifold/load-balanced)
-    est la feature différenciante **rangée en v2** par le brief car elle exige la **propagation de flux
-    à travers la logistique**. Décision de modèle à arbitrer avec le user.
-- *Données réelles* : l'agent d'extraction nécessite un accès **WebFetch/WebSearch (et Bash pour
-  `validate:data`)** OU un `Docs.json` déposé dans le projet. Sans ça, ne rien inventer — rester sur le mock.
-
-**Ne pas déborder sur la v2. Un MVP simple et correct d'abord.**
+## Pièges connus (appris sur le terrain)
+- **ViewportPortal** hérite d'un pointer-events neutralisé → tout élément interactif de la couche
+  monde doit réactiver `pointer-events: auto` (cf. `index.css`).
+- **PowerShell + UTF-8** : jamais de `Get-Content -Raw | Set-Content` pour éditer (mojibake) —
+  outils Edit/Write uniquement.
+- **E2E** : `addInitScript` rejoue à chaque navigation → seeds avec marqueur `:seeded`.
+- **Drop palette** : HTML5 `DataTransfer` (`application/nodefactory-building`) — en E2E,
+  `evaluateHandle(new DataTransfer)` + `dispatchEvent('drop')`.
+- Déposer une **machine** (pas un hub) sur une arête la branche sur `in-0/out-0` génériques →
+  arêtes pendantes après choix de recette (garde-fou possible : division réservée à `logistics`).
 
 ## Méthode de travail
-- Analyse d'abord, code ensuite. Incrémental et testé : chaque tranche livrable avec ses tests verts
-  avant la suivante, lancer les tests après chaque tranche.
-- TypeScript strict, types explicites aux frontières (données du jeu, I/O solveur).
-- Commits atomiques, messages clairs. Pas d'over-engineering (la donnée tient en mémoire).
-- README à jour : ce que fait l'appli, `dev`/`build`/`test`, structure des dossiers.
+- Analyse d'abord, code ensuite. Incrémental : chaque tranche livrable avec ses tests verts.
+- TypeScript strict aux frontières. Commits atomiques. Pas d'over-engineering.
+- README et CLAUDE.md à jour quand une mécanique change.

@@ -49,9 +49,13 @@ de la fidélité à un autre jeu.
 ## La boucle de gameplay (core loop)
 
 1. **Objectif** : un milestone actif dit quoi viser (« produire 150 lingots → débloque le Constructor »).
-2. **Construire** : l'utilisateur pose les machines depuis la palette et les relie (édition manuelle).
-   Le LP **assiste** au besoin (« Compléter l'usine » comble les déficits en amont) — il n'auto-construit
-   plus tout seul.
+2. **Construire** : l'utilisateur pose les machines depuis la palette (coût en AP) et les relie —
+   convoyeurs ET câbles électriques. **Règles du monde actées (2026-06-12)** : pas de courant,
+   pas de production (réseaux électriques physiques) ; pas de charbon, pas de courant (les
+   générateurs consomment du combustible réel) ; belts plafonnés par tier. La première usine est
+   une **boucle auto-alimentée** mineur-charbon ⇄ générateur — c'est la 1re section du tutoriel.
+   Le LP **assiste** au besoin (« Compléter l'usine » comble les déficits en amont) — il
+   n'auto-construit plus tout seul.
 3. **Regarder tourner** : la couche « game feel » déjà construite (belts animés, barres de cycle,
    points d'activité, ticker de bilan) donne le plaisir d'automatisation immédiat.
 4. **Accumuler** : la production réelle alimente une **monnaie méta** (AP) → progresse vers les milestones.
@@ -79,21 +83,28 @@ de la fidélité à un autre jeu.
 - **Prestige** : reset contre multiplicateurs permanents ⇒ « New Game+ » où l'early-game qui prenait
   une semaine se refait en 3 minutes. Récompense le savoir d'optimisation acquis.
 
-## Systèmes prioritaires (ordre d'implémentation conseillé)
+## Systèmes — état réel (2026-06-12) et suite
 
-Du plus structurant au plus tardif. **Chaque tranche est livrable et testée avant la suivante.**
+**FAIT et testé** (~220 tests unitaires + 15 E2E) :
+1. ✅ Slice d'état de jeu (`src/game/` purs + `useProgressionStore` persisté ; tick 1 s + offline).
+2. ✅ 13 milestones (M1-M10 + M11-M13 gatant les alts paliers 2/3) ; palette/inspecteur/LP filtrés ;
+   progressive disclosure (franchis repliés, actif + 1 teaser, reste masqué).
+3. ✅ Badges d'état machine (nominal/starved/blocked/**unpowered**) + audit bottleneck.
+4. ✅ Score d'efficacité 3 dims (calcul théorique : neutralise le gating électrique).
+5. ✅ Idle/offline : tick + gains offline plafonnés 4 h + popup récap (seuils 1 min / 1 AP).
+6. ✅ Onboarding : accueil 1er lancement + **tutoriel 9 étapes / 3 sections** dérivé de l'état réel
+   (Électricité → Production de fer → Automatisation), skippable, disparaît à M1.
+7. ✅ Économie de pose : capital initial 50 AP, `BUILDING_COSTS`, refus si solde insuffisant ;
+   suggestion contextuelle au pin (« + Smelter relié »).
+8. ✅ Électricité + combustible + belts plafonnés (voir skill `satisfactory-planner`, « Physique »).
 
-1. **Slice d'état de jeu** (`src/game/` + `useProgressionStore`) : monnaie méta, milestones,
-   déblocages. *Préalable à tout le reste.* (Voir « Architecture » — découplage strict.)
-2. **Milestones de production** : produire X d'un item → débloque une recette/bâtiment. Barre de
-   progression visible **avant** l'atteinte. Premier vrai crochet de rétention.
-3. **Badges d'état machine** (vert/orange/rouge = nominal/starved/blocked) sur le node + **panneau
-   d'audit bottleneck** (machines < 80 % capacité + cause). Rend l'optimisation lisible = jouable.
-4. **Score d'efficacité** : exposer les objectifs LP comme un score comparable (ressources/machine/
-   énergie). Base du méta-jeu et des classements.
-5. **Idle/offline** : accumulateur méta + progression hors-ligne plafonnée + popup récap.
-6. **Prestige / blueprints** : reset → blueprint pré-configuré importable + multiplicateurs.
-7. **Saisons / classements** (plus tard) : objectifs tournants, partage d'usines.
+**À FAIRE** (backlog priorisé : `Docs/design/2026-06-12-backlog-gameplay.md`) :
+- **Refonte monnaie (EN DESIGN)** : scinder les AP en **Points de Recherche** (progression/
+  déblocages) + monnaie d'amélioration des machines (rendement/énergie par niveau — les courbes
+  ×1.1 prod / ×1.15 coût de `balance.ts` attendent ce système). Voir le doc de design dédié.
+- **Prestige / blueprints** (base chiffrée prête : mult 1.5^N, seuil efficacité 0.75).
+- Pondération AP par palier (Q6) · stats de production · partage URL · audio · achievements.
+- **Saisons / classements** (plus tard).
 
 ## Architecture du jeu — découplage NON négociable
 

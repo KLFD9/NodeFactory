@@ -10,7 +10,7 @@ Légende effort : S < 1 h · M = 1-3 h · L = 3-8 h · XL > 8 h.
 
 ## P1 — Cœur de jeu (à faire en premier)
 
-### 1. Fuel des générateurs (le courant se MÉRITE) — effort M
+### 1. ✅ FAIT (2026-06-12) — Fuel des générateurs (le courant se MÉRITE) — effort M
 Le dataset a déjà la recette `coal-generator-power` (1 coal → 1 electricity / 2 s) mais elle
 est **décorative** : un Coal Generator produit ses 75 MW sans être alimenté en charbon.
 - À faire : un générateur sans flux de coal entrant (belt `in-coal`) ne génère **0 MW** ;
@@ -33,7 +33,7 @@ et `prestigeCount` est déjà persisté/multiplie le taux d'AP.
 - Décision design à trancher avant : que garde-t-on ? (proposition : milestones M1-M4
   re-franchis vite grâce au mult ; alts débloquées CONSERVÉES = le savoir reste).
 
-### 3. Capacité physique des belts (la logistique devient un puzzle) — effort L
+### 3. ✅ FAIT (2026-06-12) — Capacité physique des belts (la logistique devient un puzzle) — effort L
 `planBelt` calcule tier/surcharge mais le flux n'est PAS limité : une arête « surchargée »
 transporte quand même tout. Brancher la limite dans la propagation de flux de
 `computeFactory` (rate effectif = min(rate, capacité tier choisi)) transforme les
