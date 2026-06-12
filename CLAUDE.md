@@ -77,6 +77,10 @@ Vite + React 18 + TypeScript strict · React Flow `@xyflow/react` · Zustand · 
 - **Tests d'abord/en même temps** : aucune mécanique sans test sur cas à réponse connue. Lancer
   `npm run test` après chaque tranche ; E2E pour tout ce qui touche le parcours joueur.
 - **TypeScript strict** aux frontières. Commits atomiques. Pas d'over-engineering.
+- **Zéro emoji dans l'UI** (décision user 2026-06-12) : toujours des **SVG** (`src/ui/icons.tsx`
+  ou inline) ou la bibliothèque d'icônes du projet — le design doit coller à l'identité HUD
+  industriel (monochrome, glow). Les caractères techniques monochromes (✓ ▶ ▼) sont tolérés
+  dans les badges façon terminal ; aucun emoji coloré.
 
 ## État du jeu (2026-06-12)
 

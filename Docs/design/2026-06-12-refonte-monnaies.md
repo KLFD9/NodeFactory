@@ -1,8 +1,11 @@
-# Refonte des monnaies — Cogs ⚙ + Points de Recherche 🔬
+# Refonte des monnaies — Cogs + Points de Recherche
 
-**Date** : 2026-06-12 · **Statut** : PROPOSITION DE DESIGN — à valider par l'humain avant
-implémentation. · **Origine** : demande user (« AP en points de recherche + des coins pour
-améliorer les machines — satisfaction de montée en gamme »).
+> ⛔ **REMPLACÉ le 2026-06-12** par `2026-06-12-progression-v2-arbre-contrats.md` après retours
+> user : arbre de connaissances façon Icarus retenu (et non de simples bonus globaux),
+> améliorations PAR MACHINE (et non par type), objectifs → CONTRATS procéduraux, zéro emoji.
+> Conservé pour l'historique du raisonnement.
+
+**Date** : 2026-06-12 · **Statut** : OBSOLÈTE — voir ci-dessus.
 
 ---
 

@@ -1073,7 +1073,10 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
         <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
           {/* Compass direction badge showing facing angle */}
           <span className="rounded bg-zinc-800/80 px-1.5 py-0.5 text-[9px] font-extrabold text-zinc-400 border border-zinc-700/30 flex items-center gap-0.5 font-mono uppercase whitespace-nowrap">
-            <span>🧭</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-2.5 w-2.5">
+              <circle cx="12" cy="12" r="10" />
+              <path d="m16.2 7.8-2 4.2-4.2 2-2 4.2 4.2-2 2-4.2 2-2Z" />
+            </svg>
             <span className="text-emerald-450 drop-shadow-[0_0_2px_rgba(16,185,129,0.5)]">
               {rotation === 0 && '▶'}
               {rotation === 90 && '▼'}
