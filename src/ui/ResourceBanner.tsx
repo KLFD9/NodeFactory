@@ -4,6 +4,7 @@ import { useFactoryStore } from '@/store/useFactoryStore';
 import { useGraphStore } from '@/store/useGraphStore';
 import { useProgressionStore } from '@/store/useProgressionStore';
 import { computeFactory } from '@/graph/computeFactory';
+import { stockCapForRate, STOCK_BUFFER_MINUTES } from '@/game/balance';
 import { ItemIcon } from '@/ui/assets';
 
 /** Formate un nombre cumulé façon idle-game : 1234 → "1.2K". */
@@ -26,18 +27,20 @@ interface ResourceBadgeProps {
   rate: number;
   prodRate: number;
   consRate: number;
+  stock: number;
+  stockCap: number;
 }
 
-/** Pastille d'une ressource cumulée, avec compteur animé (GSAP) et indicateur de débit net. */
-function ResourceBadge({ itemId, itemName, category, total, rate, prodRate, consRate }: ResourceBadgeProps) {
-  const [display, setDisplay] = useState(total);
-  const valueRef = useRef({ v: total });
+/** Pastille d'une ressource : affiche le STOCK D'ENTREPÔT (la réserve que les contrats consomment), avec compteur animé (GSAP) et indicateur de débit net. */
+function ResourceBadge({ itemId, itemName, category, total, rate, prodRate, consRate, stock, stockCap }: ResourceBadgeProps) {
+  const [display, setDisplay] = useState(stock);
+  const valueRef = useRef({ v: stock });
   const color = CATEGORY_COLOR[category] ?? '#a1a1aa';
 
   useEffect(() => {
     const obj = valueRef.current;
     const tween = gsap.to(obj, {
-      v: total,
+      v: stock,
       duration: 0.6,
       ease: 'power2.out',
       onUpdate: () => setDisplay(obj.v),
@@ -45,7 +48,7 @@ function ResourceBadge({ itemId, itemName, category, total, rate, prodRate, cons
     return () => {
       tween.kill();
     };
-  }, [total]);
+  }, [stock]);
 
   const rateRounded = Math.round(rate * 10) / 10;
   const rateColor = rateRounded > 0.05 ? 'text-emerald-400' : rateRounded < -0.05 ? 'text-red-400' : 'text-zinc-500';
@@ -65,9 +68,10 @@ function ResourceBadge({ itemId, itemName, category, total, rate, prodRate, cons
         <ItemIcon itemId={itemId} size={22} />
       </div>
 
-      {/* Valeur brute */}
+      {/* Stock d'entrepôt — c'est CE chiffre que les contrats consomment */}
       <span className="font-mono text-xs font-bold tabular-nums text-zinc-200 tracking-wide">
         {fmtAcc(display)}
+        <span className="text-zinc-500">/{fmtAcc(stockCap)}</span>
       </span>
 
       {/* Popover flottant (Tooltip) survol */}
@@ -83,6 +87,15 @@ function ResourceBadge({ itemId, itemName, category, total, rate, prodRate, cons
         </div>
 
         <div className="h-px bg-zinc-800/60 my-0.5" />
+
+        <p className="text-[9px] leading-snug text-zinc-500">
+          Réserve livrable aux contrats, alimentée par la production. Plafond ≈ {STOCK_BUFFER_MINUTES} min de débit courant.
+        </p>
+
+        <div className="flex items-center justify-between font-mono text-[11px] font-semibold tabular-nums">
+          <span className="text-zinc-500">Total produit (à vie) :</span>
+          <span className="text-zinc-300">{fmtAcc(total)}</span>
+        </div>
 
         <div className="flex items-center justify-between font-mono text-[11px] font-semibold tabular-nums">
           <span className="text-zinc-500">Flux net :</span>
@@ -121,6 +134,7 @@ export function ResourceBanner() {
   const nodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
   const cumulativeProduced = useProgressionStore((s) => s.cumulativeProduced);
+  const itemStock = useProgressionStore((s) => s.itemStock);
 
   if (!gameData) return null;
 
@@ -155,6 +169,8 @@ export function ResourceBanner() {
               rate={rate}
               prodRate={prodRate}
               consRate={consRate}
+              stock={itemStock[item.id] ?? 0}
+              stockCap={stockCapForRate(prodRate)}
             />
           );
         })}

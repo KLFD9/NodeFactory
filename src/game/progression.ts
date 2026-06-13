@@ -13,6 +13,7 @@ import {
   MILESTONES,
   STARTING_BOLTS,
   STARTING_RP,
+  stockCapForRate,
   computeRpRate,
   computeOfflineGains,
   checkNewlyReachedMilestones,
@@ -39,6 +40,8 @@ export interface ProgressionState {
   bolts: number;
   /** Quantité cumulée produite par item (clé = itemId) — base des milestones. */
   cumulativeProduced: Record<string, number>;
+  /** Stock d'entrepôt par item (clé = itemId), alimenté par la production brute, plafonné. Base des livraisons de contrat. */
+  itemStock: Record<string, number>;
   /** Quantité cumulée produite par nœud et par item (nodeId -> itemId -> total). */
   nodeCumulativeProduced: Record<string, Record<string, number>>;
   /** Ids des milestones déjà franchis (idempotence). */
@@ -81,6 +84,7 @@ export function initialProgression(nowMs: number = Date.now()): ProgressionState
     researchPoints: STARTING_RP,
     bolts: STARTING_BOLTS,
     cumulativeProduced: {},
+    itemStock: {},
     nodeCumulativeProduced: {},
     reachedMilestones: [],
     unlockedBuildings: [],
@@ -130,7 +134,10 @@ export interface NodeProductionRate {
 }
 
 export interface TickInput {
-  /** Production brute par item (summary.production) — accumulée pour les milestones. */
+  /**
+   * Production brute par item (summary.production) — accumulée pour les milestones ET
+   * pour le stock d'entrepôt (base des livraisons de contrat).
+   */
   grossProduction: ProductionRate[];
   /** Production brute par machine ID et par item. */
   nodeProductions?: NodeProductionRate[];
@@ -220,10 +227,27 @@ export function applyProductionTick(state: ProgressionState, input: TickInput): 
   // qui ne progresse que pendant la production — pas de punition pendant l'absence).
   const gameMinutesElapsed = state.gameMinutesElapsed + safeDtMin;
 
+  // 1bis. Stock d'entrepôt : alimenté par la production BRUTE (même source que les
+  // milestones). Compte aussi les intermédiaires entièrement consommés en aval (ex.
+  // Iron Ingot transformé en Iron Plate) — sinon un contrat sur un tel item ne
+  // progresserait jamais dans une usine équilibrée (surplus net = 0).
+  // Plafond = stockCapForRate(débit courant) : scale avec la production pour ne pas
+  // gaspiller le surplus d'une usine avancée tout en restant borné.
+  const itemStock = { ...state.itemStock };
+  if (safeDtMin > 0) {
+    for (const { itemId, ratePerMin } of grossProduction) {
+      if (ratePerMin > 0) {
+        const current = itemStock[itemId] ?? 0;
+        itemStock[itemId] = Math.min(stockCapForRate(ratePerMin), current + ratePerMin * safeDtMin);
+      }
+    }
+  }
+
   let next: ProgressionState = {
     ...state,
     cumulativeProduced,
     nodeCumulativeProduced,
+    itemStock,
     researchPoints: state.researchPoints + rpGained,
     lastSeenMs: nowMs,
     lastRpRatePerMin: rpRatePerMin,
@@ -245,15 +269,17 @@ export function applyProductionTick(state: ProgressionState, input: TickInput): 
     next = { ...withUnlocks, reachedMilestones: reached };
   }
 
-  // 4. Contrats : complétion (Bolts + réputation + déblocage), échec, ou rafraîchissement des offres.
-  const { slice, events } = advanceContracts(
+  // 4. Contrats : livraison depuis le stock, complétion (Bolts + réputation + déblocage),
+  //    échec, ou rafraîchissement des offres.
+  const { slice, itemStock: stockAfterDelivery, events } = advanceContracts(
     contractSliceOf(next),
-    next.cumulativeProduced,
+    next.itemStock,
     gameMinutesElapsed,
     input.producibleItems ?? [],
   );
   next = {
     ...next,
+    itemStock: stockAfterDelivery,
     reputation: slice.reputation,
     contractsCompleted: slice.contractsCompleted,
     activeContract: slice.activeContract,
@@ -305,12 +331,7 @@ export function trySpendBolts(state: ProgressionState, cost: number): SpendResul
  * introuvable ou si un contrat est déjà actif.
  */
 export function acceptContract(state: ProgressionState, offerId: string): ProgressionState {
-  const slice = acceptOffer(
-    contractSliceOf(state),
-    offerId,
-    state.cumulativeProduced,
-    state.gameMinutesElapsed,
-  );
+  const slice = acceptOffer(contractSliceOf(state), offerId, state.gameMinutesElapsed);
   return { ...state, activeContract: slice.activeContract, contractOffers: slice.contractOffers };
 }
 

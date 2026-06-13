@@ -313,6 +313,248 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
   const { zoom } = useViewport();
   const updateNodeInternals = useUpdateNodeInternals();
 
+  const particleContainerRef = useRef<HTMLDivElement>(null);
+
+  // Game Dev Tycoon inspired floating Research Point (RP) bubbles
+  useEffect(() => {
+    if (!gameData) return;
+    const info = computeNodeInfo(data, gameData);
+    const building = info.building;
+    if (!building) return;
+
+    // Filter categories that produce resources (and hence generate RP)
+    const canProduce = building.category === 'extraction' || 
+                        building.category === 'smelting' || 
+                        building.category === 'manufacturing';
+
+    const actualFlow = flowMap.get(id);
+    const powered = poweredMap.get(id) ?? true;
+    const status = computeMachineStatus(data, actualFlow, gameData, powered);
+    const isActive = canProduce && status.state === 'nominal';
+
+    if (!isActive) return;
+
+    const spawnRPBubble = () => {
+      const container = particleContainerRef.current;
+      if (!container) return;
+
+      const bubble = document.createElement('div');
+      bubble.className = 'absolute pointer-events-none flex items-center justify-center rounded-full bg-cyan-950/90 border border-cyan-400/80 shadow-[0_0_10px_rgba(34,211,238,0.5)] z-40';
+      bubble.style.width = '16px';
+      bubble.style.height = '16px';
+      bubble.style.left = `${10 + Math.random() * (container.clientWidth - 20)}px`;
+      bubble.style.top = `${container.clientHeight / 2}px`;
+
+      // Tiny white/cyan SVG flask icon
+      bubble.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" style="width: 9px; height: 9px;">
+          <path d="M10 2v6.5L4.5 18a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 8.5V2" />
+          <path d="M8.5 2h7" />
+        </svg>
+      `;
+
+      container.appendChild(bubble);
+
+      // Float bubble upwards, drift left/right, scale up then fade out
+      gsap.fromTo(
+        bubble,
+        {
+          y: 0,
+          x: 0,
+          scale: 0.6,
+          opacity: 0,
+        },
+        {
+          y: -80 - Math.random() * 40,
+          x: (Math.random() - 0.5) * 24,
+          scale: 1.1,
+          opacity: 1,
+          duration: 1.4 + Math.random() * 0.6,
+          ease: 'power1.out',
+          onComplete: () => {
+            gsap.to(bubble, {
+              opacity: 0,
+              scale: 0.8,
+              y: '-=15',
+              duration: 0.3,
+              onComplete: () => {
+                bubble.remove();
+              },
+            });
+          },
+        }
+      );
+    };
+
+    // Spawn first bubble with a slight random delay, then spawn on interval
+    const initialDelay = setTimeout(() => {
+      spawnRPBubble();
+    }, Math.random() * 2000);
+
+    const interval = setInterval(() => {
+      spawnRPBubble();
+    }, 2500 + Math.random() * 1500);
+
+    return () => {
+      clearTimeout(initialDelay);
+      clearInterval(interval);
+    };
+  }, [id, gameData, data, flowMap, poweredMap]);
+
+  // Recalcule les ancrages d'arêtes côté React Flow quand l'orientation change,
+  // sinon les connexions restent attachées à la position d'origine du pin.
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [id, data.rotation, updateNodeInternals]);
+
+  // Calculs nécessaires aux hooks GSAP du smelter, dispo MÊME si gameData n'est pas
+  // encore chargé (valeurs par défaut neutres) — les Hooks ne peuvent JAMAIS être
+  // conditionnels : déclarés une fois pour toutes, ici, avant le `return null` ci-dessous.
+  const earlyInfo = gameData ? computeNodeInfo(data, gameData) : undefined;
+  const earlyBuilding = earlyInfo?.building;
+  const earlyPowered = poweredMap.get(id) ?? true;
+  const earlyMachineState = gameData
+    ? computeMachineStatus(data, flowMap.get(id), gameData, earlyPowered).state
+    : null;
+  const isSmelterNode = earlyBuilding?.category === 'smelting';
+
+  // GSAP DOM Element references (smelter uniquement, mais déclarées pour tous les nodes).
+  const fanRef = useRef<SVGSVGElement | null>(null);
+  const coreRef = useRef<HTMLDivElement | null>(null);
+  const leftChimneyRef = useRef<HTMLDivElement | null>(null);
+  const rightChimneyRef = useRef<HTMLDivElement | null>(null);
+  const fanTweenRef = useRef<gsap.core.Tween | null>(null);
+
+  // GSAP Effect 1: Fan Rotation with smooth speed scale and decay halts
+  useEffect(() => {
+    if (!isSmelterNode || !fanRef.current) return;
+
+    if (!fanTweenRef.current) {
+      fanTweenRef.current = gsap.to(fanRef.current, {
+        rotation: 360,
+        duration: 1.5,
+        repeat: -1,
+        ease: 'none',
+        paused: true,
+      });
+    }
+
+    const tween = fanTweenRef.current;
+    const isFanActive = earlyPowered && earlyMachineState !== 'blocked' && earlyMachineState !== 'unpowered';
+
+    if (isFanActive) {
+      if (tween.paused()) {
+        tween.play();
+      }
+      const targetSpeed = earlyMachineState === 'starved' ? 0.25 : 1.0;
+      gsap.to(tween, { timeScale: targetSpeed, duration: 1.5, ease: 'power1.out' });
+    } else {
+      // Decay speed smoothly to 0 (physics halt feel)
+      gsap.to(tween, {
+        timeScale: 0,
+        duration: 2.0,
+        ease: 'power2.out',
+        onComplete: () => {
+          if (!isFanActive && tween.timeScale() === 0) {
+            tween.pause();
+          }
+        },
+      });
+    }
+  }, [isSmelterNode, earlyPowered, earlyMachineState]);
+
+  // GSAP Effect 2: Molten core glow pulsing & color transitions
+  useEffect(() => {
+    if (!isSmelterNode || !coreRef.current) return;
+
+    gsap.killTweensOf(coreRef.current);
+
+    if (!earlyPowered) {
+      gsap.to(coreRef.current, { opacity: 0, filter: 'brightness(0.2)', duration: 1.2, ease: 'power2.out' });
+    } else if (earlyMachineState === 'starved') {
+      gsap.to(coreRef.current, { opacity: 0.35, duration: 0.8 });
+      gsap.fromTo(
+        coreRef.current,
+        { filter: 'brightness(0.6) contrast(1.0)' },
+        {
+          filter: 'brightness(0.85) contrast(1.1)',
+          duration: 2.5,
+          repeat: -1,
+          yoyo: true,
+          ease: 'sine.inOut',
+        },
+      );
+    } else if (earlyMachineState === 'blocked') {
+      gsap.to(coreRef.current, {
+        opacity: 0.95,
+        filter: 'brightness(1.15) contrast(1.2)',
+        duration: 0.8,
+        ease: 'power1.out',
+      });
+    } else {
+      // Nominal
+      gsap.to(coreRef.current, { opacity: 0.9, duration: 0.5 });
+      gsap.fromTo(
+        coreRef.current,
+        { filter: 'brightness(0.9) contrast(1.1)' },
+        {
+          filter: 'brightness(1.25) contrast(1.25)',
+          duration: 1.2,
+          repeat: -1,
+          yoyo: true,
+          ease: 'sine.inOut',
+        },
+      );
+    }
+  }, [isSmelterNode, earlyPowered, earlyMachineState]);
+
+  // GSAP Effect 3: Dynamic chimney sparks particle emitter (random physics)
+  useEffect(() => {
+    const isActive = isSmelterNode && earlyPowered && earlyMachineState === 'nominal';
+    if (!isActive) return;
+
+    const spawnSpark = (container: HTMLDivElement) => {
+      if (!container) return;
+      const spark = document.createElement('div');
+      spark.className = 'nf-smelter-chimney-spark-live';
+
+      const randomX = (Math.random() - 0.5) * 12; // -6px to +6px
+      const scale = 0.5 + Math.random() * 0.5;
+
+      container.appendChild(spark);
+
+      gsap.fromTo(
+        spark,
+        {
+          x: randomX,
+          y: 0,
+          scale: scale,
+          opacity: 1,
+        },
+        {
+          x: randomX * 2.5,
+          y: -25 - Math.random() * 15,
+          scale: 0.1,
+          opacity: 0,
+          duration: 1.2 + Math.random() * 0.6,
+          ease: 'power1.out',
+          onComplete: () => {
+            spark.remove();
+          },
+        },
+      );
+    };
+
+    const interval = setInterval(() => {
+      if (leftChimneyRef.current) spawnSpark(leftChimneyRef.current);
+      if (rightChimneyRef.current) spawnSpark(rightChimneyRef.current);
+    }, 400);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [isSmelterNode, earlyPowered, earlyMachineState]);
+
   // Recalcule les ancrages d'arêtes côté React Flow quand l'orientation change,
   // sinon les connexions restent attachées à la position d'origine du pin.
   useEffect(() => {
@@ -524,6 +766,234 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
     : 1.0;
   const handleOpacity = anyPowerNetworkActive ? (activePowerNodes.has(id) ? 1.0 : 0.15) : 1.0;
 
+  // ── Custom layout for Coal Generators ──
+  if (building?.id === 'coal-generator') {
+    const perItem = info.configured;
+    const isNominal = machineState === 'nominal';
+    const isEnergyItem = (itemId: string) => gameData.items.find((i) => i.id === itemId)?.category === 'energy';
+
+    const inPorts: PortDef[] = perItem
+      ? info.inputs
+          .filter((p) => !isEnergyItem(p.itemId))
+          .map((p) => ({ id: `in-${p.itemId}`, title: `${p.itemName} · ${p.ratePerMin}/min` }))
+      : Array.from({ length: genericPorts(building, data, 'inputs') }, (_, i) => ({
+          id: `in-${i}`,
+        }));
+
+    const isNodeActive = anyPowerNetworkActive && activePowerNodes.has(id);
+    const cardOpacity = anyPowerNetworkActive
+      ? (activePowerNodes.has(id) ? 1.0 : 0.35)
+      : 1.0;
+    const handleOpacity = anyPowerNetworkActive ? (activePowerNodes.has(id) ? 1.0 : 0.15) : 1.0;
+
+    const styleVariables = {
+      '--category-color': '#10b981',
+      '--category-glow': isNodeActive ? 'rgba(16, 185, 129, 0.55)' : 'rgba(16, 185, 129, 0.25)',
+      '--category-glow-soft': 'rgba(16, 185, 129, 0.08)',
+      opacity: cardOpacity,
+    } as React.CSSProperties;
+
+    const net = powerNetworkMap.get(id);
+    const demand = net?.totalDemandMW ?? 0;
+    const capacity = net?.totalGenMW ?? info.powerMW;
+
+    return (
+      <div
+        style={styleVariables}
+        className={[
+          'relative min-h-[132px] w-[300px] text-xs shadow-2xl transition-all duration-300 nf-generator-node flex flex-col overflow-visible',
+          selected ? 'nf-node-selected-glow scale-[1.01]' : '',
+        ].join(' ')}
+      >
+        <div ref={particleContainerRef} className="absolute inset-0 pointer-events-none overflow-visible z-30" />
+        {selected && <HudBrackets color="#10b981" />}
+        <NodeActions id={id} data={data} />
+
+        {/* 1. POWER LOGO & STATUS HEADER */}
+        <div className="flex items-center justify-between gap-2 border-b border-zinc-900 px-3 py-2 bg-zinc-950/40 relative z-10 rounded-t-xl">
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0 shadow-sm animate-pulse">
+              <PowerIcon className="h-4 w-4" />
+            </span>
+            <span className="font-extrabold tracking-tight text-zinc-100 text-[12.5px] uppercase">{building?.name ?? 'Coal Generator'}</span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="rounded bg-zinc-800/80 px-1.5 py-0.5 text-[8.5px] font-extrabold text-zinc-400 border border-zinc-700/30 flex items-center font-mono">
+              <span className="text-emerald-450 drop-shadow-[0_0_2px_rgba(16,185,129,0.5)]">
+                {rotation === 0 && '▶'}
+                {rotation === 90 && '▼'}
+                {rotation === 180 && '◀'}
+                {rotation === 270 && '▲'}
+              </span>
+            </span>
+
+            {(() => {
+              const stateKey = machineState || 'unpowered';
+              return (
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full relative z-10 nf-diode-glow"
+                  style={{
+                    '--state-color': STATE_STYLE[stateKey].color,
+                    background: STATE_STYLE[stateKey].color,
+                    animation:
+                      stateKey === 'nominal' ? undefined : 'nf-activity-dot 1s ease-in-out infinite',
+                  } as React.CSSProperties}
+                />
+              );
+            })()}
+          </div>
+        </div>
+
+        {/* 2. MAIN CORE CHAMBER - HORIZONTAL LAYOUT */}
+        <div className="flex flex-1 p-3 gap-2 bg-[#060c09] rounded-b-xl relative overflow-hidden">
+          <div className="absolute inset-0 pointer-events-none nf-furnace-grid opacity-15 z-0" />
+
+          {/* Left: Input slot (Charcoal Feeding) */}
+          <div className="flex-1 flex flex-col justify-center items-center z-10">
+            {info.inputs.length > 0 ? (
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-[7.5px] font-black uppercase text-zinc-450 tracking-wider select-none mb-0.5">Fuel Supply</span>
+                {info.inputs.map((input, idx) => {
+                  const actualRate = actualFlow?.inputs.get(input.itemId);
+                  const consumed = input.ratePerMin;
+                  const connected = actualRate !== undefined;
+                  const starved = connected && actualRate < consumed - 0.01;
+
+                  return (
+                    <div 
+                      key={idx} 
+                      className="flex flex-col items-center justify-center p-2 rounded-xl bg-zinc-900/60 border border-zinc-800/60 border-l-[2.5px] border-l-orange-500 w-20 shrink-0"
+                    >
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-zinc-950 border border-zinc-800 shadow-[inset_0_2px_4px_rgba(0,0,0,0.9)] mb-1.5 transition-all duration-300 hover:border-orange-500/50 hover:shadow-[0_0_8px_rgba(249,115,22,0.25),inset_0_2px_4px_rgba(0,0,0,0.9)]">
+                        <ItemIcon itemId={input.itemId} size={32} />
+                      </div>
+                      
+                      {connected && starved ? (
+                        <span className="font-mono flex items-baseline gap-0.5 bg-zinc-900/80 px-1.5 py-0.5 rounded border border-zinc-800 text-[8.5px] font-bold">
+                          <span className="font-extrabold text-amber-450 animate-pulse">{round(actualRate)}</span>
+                          <span className="text-[7.5px] text-zinc-455">/{round(consumed)}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[8.5px] text-orange-400 font-mono font-bold bg-orange-500/5 px-2 py-0.5 rounded border border-orange-500/15">{round(consumed)}/m</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full p-2 border border-dashed border-zinc-800/40 rounded-lg text-zinc-550 text-[8px] uppercase select-none">
+                No Fuel Required
+              </div>
+            )}
+          </div>
+
+          {/* Center: Combustion Furnace & Steam Turbine */}
+          <div className="w-[88px] flex flex-col items-center justify-center gap-2 relative z-10 border-l border-r border-zinc-900/60 px-1">
+            <span className="text-[7px] font-black uppercase text-zinc-450 tracking-widest select-none">Combustion</span>
+            
+            {/* Turbine circular viewport & Boiler furnace */}
+            <div className="w-[58px] h-[58px] rounded-full border border-zinc-850 bg-zinc-950 shadow-[inset_0_2px_4px_rgba(0,0,0,0.95)] flex flex-col items-center relative overflow-hidden shrink-0">
+              
+              {/* Upper half: Steam turbine blades */}
+              <div className="w-full h-1/2 flex items-center justify-center relative overflow-hidden border-b border-zinc-900">
+                <svg 
+                  className={`w-6 h-6 text-emerald-400/80 animate-generator-turbine`} 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  strokeWidth="2"
+                  style={{ '--turbine-speed': isNominal && powered ? '1.2s' : '0s' } as React.CSSProperties}
+                >
+                  <circle cx="12" cy="12" r="2" />
+                  <path d="M12 2v10M12 12l7-7M12 12l7 7M12 12v10M12 12l-7 7M12 12l-7-7" />
+                </svg>
+              </div>
+
+              {/* Lower half: Glowing coal combustion fire */}
+              <div className="w-full h-1/2 nf-generator-furnace flex items-center justify-center">
+                {isNominal && powered ? (
+                  <div className="absolute inset-0 bg-radial from-orange-500/80 via-red-600/40 to-transparent animate-generator-fire" />
+                ) : (
+                  <div className="absolute inset-0 bg-zinc-900" />
+                )}
+                <span className="text-[6.5px] font-mono text-orange-500/85 z-10 font-bold select-none tracking-tighter drop-shadow-[0_0_2px_rgba(249,115,22,0.4)]">
+                  {isNominal && powered ? 'FIRE_OK' : 'OFFLINE'}
+                </span>
+              </div>
+
+              <div className="absolute inset-0 border border-zinc-900/60 rounded-full pointer-events-none z-20" />
+            </div>
+
+            {cycleTime > 0 ? (
+              <div className="w-full flex flex-col items-center gap-0.5">
+                <div className="w-[64px] h-1.5 relative rounded bg-zinc-950/90 border border-zinc-850/80 overflow-hidden shadow-inner">
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-l"
+                    style={{
+                      width: '100%',
+                      background: 'linear-gradient(90deg, #059669, #10b981 80%, #a7f3d0 100%)',
+                      boxShadow: '0 0 6px 1px rgba(16, 185, 129, 0.6)',
+                      transformOrigin: 'left center',
+                      animation: `nf-cycle ${cycleTime}s linear infinite`,
+                    } as React.CSSProperties}
+                  />
+                </div>
+              </div>
+            ) : (
+              <span className="text-[7px] font-extrabold uppercase text-zinc-550 tracking-wider text-center select-none">Idle</span>
+            )}
+          </div>
+
+          {/* Right: Electricity Telemetry Output slot */}
+          <div className="flex-1 flex flex-col justify-center items-center z-10">
+            <span className="text-[7.5px] font-black uppercase text-zinc-450 tracking-wider select-none mb-1 text-center">Power Output</span>
+            <div className="flex flex-col gap-1.5 bg-zinc-900/60 p-2 rounded-xl border border-zinc-800/60 border-r-[2.5px] border-r-emerald-500 w-20 shrink-0 select-none">
+              <div className="flex items-center gap-1.5 font-bold text-emerald-450">
+                <span className="text-[10px] animate-pulse">⚡</span>
+                <span className="text-[10.5px] font-mono font-extrabold">{info.powerMW} MW</span>
+              </div>
+              <div className="text-[7.5px] font-mono text-zinc-405 tracking-tight flex flex-col gap-0.5 mt-0.5">
+                <span>GRID LOAD:</span>
+                <span className="font-extrabold text-zinc-200">{round(demand)}/{round(capacity)} MW</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. CONNECTION HANDLES */}
+        <Handle
+          key="power-out"
+          id="power-out"
+          type="source"
+          position={getRotatedPosition(Position.Bottom, rotation)}
+          title="Sortie d'énergie"
+          style={{
+            ...getHandleStyle(getRotatedPosition(Position.Bottom, rotation), 'rgba(245, 158, 11, 0.6)'),
+            opacity: handleOpacity,
+            transition: 'opacity 0.22s ease-in-out',
+          }}
+          className={HANDLE_POWER_OUT}
+        />
+
+        {inPorts.map((p, i) => {
+          const rotPos = getRotatedPosition(Position.Left, rotation);
+          return (
+            <Handle
+              key={p.id}
+              id={p.id}
+              type="target"
+              position={rotPos}
+              style={getMultiHandleStyle(rotPos, i, inPorts.length, 'rgba(249, 115, 22, 0.6)')}
+              title={p.title}
+              className={HANDLE_IN}
+            />
+          );
+        })}
+      </div>
+    );
+  }
+
   // ── Custom layout for Smelters ──
   if (building?.category === 'smelting') {
     const perItem = info.configured;
@@ -577,140 +1047,6 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
       opacity: cardOpacity,
     } as React.CSSProperties;
 
-    // GSAP DOM Element references
-    const fanRef = useRef<SVGSVGElement | null>(null);
-    const coreRef = useRef<HTMLDivElement | null>(null);
-    const leftChimneyRef = useRef<HTMLDivElement | null>(null);
-    const rightChimneyRef = useRef<HTMLDivElement | null>(null);
-    const fanTweenRef = useRef<gsap.core.Tween | null>(null);
-
-    // GSAP Effect 1: Fan Rotation with smooth speed scale and decay halts
-    useEffect(() => {
-      if (!fanRef.current) return;
-      
-      if (!fanTweenRef.current) {
-        fanTweenRef.current = gsap.to(fanRef.current, {
-          rotation: 360,
-          duration: 1.5,
-          repeat: -1,
-          ease: 'none',
-          paused: true
-        });
-      }
-
-      const tween = fanTweenRef.current;
-      const isFanActive = powered && machineState !== 'blocked' && machineState !== 'unpowered';
-
-      if (isFanActive) {
-        if (tween.paused()) {
-          tween.play();
-        }
-        const targetSpeed = machineState === 'starved' ? 0.25 : 1.0;
-        gsap.to(tween, { timeScale: targetSpeed, duration: 1.5, ease: 'power1.out' });
-      } else {
-        // Decay speed smoothly to 0 (physics halt feel)
-        gsap.to(tween, { 
-          timeScale: 0, 
-          duration: 2.0, 
-          ease: 'power2.out',
-          onComplete: () => {
-            if (!isFanActive && tween.timeScale() === 0) {
-              tween.pause();
-            }
-          }
-        });
-      }
-    }, [powered, machineState]);
-
-    // GSAP Effect 2: Molten core glow pulsing & color transitions
-    useEffect(() => {
-      if (!coreRef.current) return;
-      
-      gsap.killTweensOf(coreRef.current);
-
-      if (!powered) {
-        gsap.to(coreRef.current, { opacity: 0, filter: 'brightness(0.2)', duration: 1.2, ease: 'power2.out' });
-      } else if (machineState === 'starved') {
-        gsap.to(coreRef.current, { opacity: 0.35, duration: 0.8 });
-        gsap.fromTo(coreRef.current, 
-          { filter: 'brightness(0.6) contrast(1.0)' },
-          { 
-            filter: 'brightness(0.85) contrast(1.1)', 
-            duration: 2.5, 
-            repeat: -1, 
-            yoyo: true, 
-            ease: 'sine.inOut' 
-          }
-        );
-      } else if (machineState === 'blocked') {
-        gsap.to(coreRef.current, { 
-          opacity: 0.95, 
-          filter: 'brightness(1.15) contrast(1.2)', 
-          duration: 0.8, 
-          ease: 'power1.out' 
-        });
-      } else {
-        // Nominal
-        gsap.to(coreRef.current, { opacity: 0.9, duration: 0.5 });
-        gsap.fromTo(coreRef.current, 
-          { filter: 'brightness(0.9) contrast(1.1)' },
-          { 
-            filter: 'brightness(1.25) contrast(1.25)', 
-            duration: 1.2, 
-            repeat: -1, 
-            yoyo: true, 
-            ease: 'sine.inOut' 
-          }
-        );
-      }
-    }, [powered, machineState]);
-
-    // GSAP Effect 3: Dynamic chimney sparks particle emitter (random physics)
-    useEffect(() => {
-      const isActive = powered && machineState === 'nominal';
-      if (!isActive) return;
-
-      const spawnSpark = (container: HTMLDivElement) => {
-        if (!container) return;
-        const spark = document.createElement('div');
-        spark.className = 'nf-smelter-chimney-spark-live';
-        
-        const randomX = (Math.random() - 0.5) * 12; // -6px to +6px
-        const scale = 0.5 + Math.random() * 0.5;
-        
-        container.appendChild(spark);
-        
-        gsap.fromTo(spark, 
-          { 
-            x: randomX, 
-            y: 0, 
-            scale: scale, 
-            opacity: 1 
-          },
-          {
-            x: randomX * 2.5,
-            y: -25 - Math.random() * 15,
-            scale: 0.1,
-            opacity: 0,
-            duration: 1.2 + Math.random() * 0.6,
-            ease: 'power1.out',
-            onComplete: () => {
-              spark.remove();
-            }
-          }
-        );
-      };
-
-      const interval = setInterval(() => {
-        if (leftChimneyRef.current) spawnSpark(leftChimneyRef.current);
-        if (rightChimneyRef.current) spawnSpark(rightChimneyRef.current);
-      }, 400);
-
-      return () => {
-        clearInterval(interval);
-      };
-    }, [powered, machineState]);
-
     return (
       <div
         style={styleVariables}
@@ -719,6 +1055,7 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
           selected ? 'nf-node-selected-glow scale-[1.01]' : '',
         ].join(' ')}
       >
+        <div ref={particleContainerRef} className="absolute inset-0 pointer-events-none overflow-visible z-30" />
         {selected && <HudBrackets color="#f97316" />}
         <NodeActions id={id} data={data} />
 
@@ -1048,6 +1385,7 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
         selected ? 'nf-node-selected-glow scale-[1.01]' : '',
       ].join(' ')}
     >
+      <div ref={particleContainerRef} className="absolute inset-0 pointer-events-none overflow-visible z-30" />
       {selected && <HudBrackets color={accentColor} />}
       <NodeActions id={id} data={data} />
 

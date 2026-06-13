@@ -130,7 +130,7 @@ export const useProgressionStore = create<ProgressionStore>()(
     }),
     {
       name: 'nf-progression',
-      version: 3,
+      version: 4,
       migrate: (persisted, version) => {
         const s = persisted as Record<string, unknown>;
         // v1 → v2 (refonte monnaies) : les anciens AP deviennent des Points de Recherche
@@ -153,6 +153,15 @@ export const useProgressionStore = create<ProgressionStore>()(
           s.offersGeneratedAtGameMin = 0;
           if (s.researchPoints == null) s.researchPoints = STARTING_RP;
         }
+        // v3 → v4 (stock d'entrepôt) : nouveau champ `itemStock`, et `activeContract` change
+        // de forme (`acceptedAtProduced` → `delivered`) → on relance le contrat en cours
+        // proprement (le joueur le voit revenir dans les offres).
+        if (version < 4) {
+          s.itemStock = {};
+          s.activeContract = null;
+          s.contractOffers = [];
+          s.offersGeneratedAtGameMin = 0;
+        }
         return s as unknown as ProgressionState;
       },
       // On ne persiste QUE l'état sérialisable, pas les actions ni les notifications transitoires.
@@ -160,6 +169,7 @@ export const useProgressionStore = create<ProgressionStore>()(
         researchPoints: s.researchPoints,
         bolts: s.bolts,
         cumulativeProduced: s.cumulativeProduced,
+        itemStock: s.itemStock,
         nodeCumulativeProduced: s.nodeCumulativeProduced,
         reachedMilestones: s.reachedMilestones,
         unlockedBuildings: s.unlockedBuildings,

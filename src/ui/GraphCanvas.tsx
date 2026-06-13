@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Background,
   Controls,
+  ControlButton,
   MarkerType,
   MiniMap,
   Panel,
@@ -9,6 +10,7 @@ import {
   SelectionMode,
   ViewportPortal,
   useReactFlow,
+  useViewport,
   ConnectionLineType,
   type Connection,
   type NodeTypes,
@@ -17,14 +19,16 @@ import {
 import type { IsValidConnection } from '@xyflow/react';
 import { useFactoryStore } from '@/store/useFactoryStore';
 import { useGraphStore, type MachineNode as MachineNodeType } from '@/store/useGraphStore';
+import { useProgressionStore } from '@/store/useProgressionStore';
 import { useWorldStore } from '@/store/useWorldStore';
+import { contractProgress } from '@/game/contracts';
 import { ResourceLayer } from './world/ResourceLayer';
 import { MiniMapDeposits } from './world/MiniMapDeposits';
 import { computeFactory } from '@/graph/computeFactory';
 import { computeNodeInfo } from '@/graph/nodeInfo';
 import { isValidGraphConnection } from '@/graph/connection';
 import { computePowerNetworks, isPowerSourceHandle, isPowerTargetHandle } from '@/graph/power';
-import { MachineNode } from './nodes/MachineNode';
+import { SafeMachineNode } from './nodes/SafeMachineNode';
 import { BeltEdge } from './edges/BeltEdge';
 import { PowerEdge } from './edges/PowerEdge';
 import { PALETTE_MIME } from './Palette';
@@ -36,6 +40,7 @@ import {
   type NodeActualFlow,
   type PowerNetworkInfo,
 } from './NodeFlowContext';
+import { ProgressionStatus } from './App';
 
 /** Couleur d'arête par tier de convoyeur (Mk1..Mk6). */
 const TIER_COLOR: Record<number, string> = {
@@ -47,25 +52,9 @@ const TIER_COLOR: Record<number, string> = {
   6: '#fb923c',
 };
 
-function OverviewIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={props.className}
-      {...props}
-    >
-      <circle cx="12" cy="12" r="10" />
-      <path d="m16.2 7.8-2 4.2-4.2 2-2 4.2 4.2-2 2-4.2 2-2Z" />
-    </svg>
-  );
-}
 
-function MapIcon(props: React.SVGProps<SVGSVGElement>) {
+
+function ResetIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -77,14 +66,17 @@ function MapIcon(props: React.SVGProps<SVGSVGElement>) {
       className={props.className}
       {...props}
     >
-      <path d="M14.106 5.553a2 2 0 0 0-1.788 0l-3.659 1.83a1 1 0 0 1-.894 0L4 5.5V17a1 1 0 0 0 1 1h.106a2 2 0 0 1 1.788 0l3.659-1.83a1 1 0 0 0 .894 0l3.659 1.83a2 2 0 0 0 1.788 0L20 17.1V5.6a1 1 0 0 0-1-1h-.106a2 2 0 0 0-1.788 0l-3-1.5a1.5 1.5 0 0 1-3.659 0Z" />
-      <path d="M15 5.75v12.5" />
-      <path d="M9 5.75v12.5" />
+      <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+      <path d="M16 16h5v5" />
     </svg>
   );
 }
 
 function Flow() {
+  const { zoom } = useViewport();
+  const zoomPct = Math.round(zoom * 100);
   const gameData = useFactoryStore((s) => s.gameData);
   const nodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
@@ -103,8 +95,8 @@ function Flow() {
   const copySelection = useGraphStore((s) => s.copySelection);
   const paste = useGraphStore((s) => s.paste);
   const duplicateSelection = useGraphStore((s) => s.duplicateSelection);
-  const { screenToFlowPosition, fitView, setCenter, fitBounds } = useReactFlow();
-  const nodeTypes = useMemo<NodeTypes>(() => ({ machine: MachineNode }), []);
+  const { screenToFlowPosition, fitView, setCenter } = useReactFlow();
+  const nodeTypes = useMemo<NodeTypes>(() => ({ machine: SafeMachineNode }), []);
   const edgeTypes = useMemo(() => ({ belt: BeltEdge, power: PowerEdge }), []);
 
   // Recentre le canvas après chaque auto-génération.
@@ -226,7 +218,7 @@ function Flow() {
         domAttributes: domAttributes(e.id),
         markerEnd: { type: MarkerType.ArrowClosed, color, width: 10, height: 10 },
         style: { stroke: color, strokeWidth: 3 },
-        data: { itemName: plan.itemName, rate: plan.ratePerMin, tierLabel, color, overloaded },
+        data: { itemId: plan.itemId, itemName: plan.itemName, rate: plan.ratePerMin, tierLabel, color, overloaded },
       };
     });
 
@@ -355,32 +347,19 @@ function Flow() {
     return '#3f3f46';
   }, []);
 
-  const onRegenerate = useCallback(() => {
-    if (window.confirm('Régénérer la carte ? Les mineurs posés seront détachés de leur gisement.')) {
+  const onNewGame = useCallback(() => {
+    if (
+      window.confirm(
+        "Commencer une nouvelle partie ? Votre usine sera entièrement détruite et votre progression (Points de Recherche, Bolts, jalons débloqués) sera réinitialisée."
+      )
+    ) {
+      useProgressionStore.getState().reset();
+      useGraphStore.getState().setGraph([], []);
       regenerate(rawItemIds);
     }
   }, [regenerate, rawItemIds]);
 
-  // Vue d'ensemble : cadre tous les gisements ET l'usine — l'antidote au « je suis perdu ».
-  const onOverview = useCallback(() => {
-    const xs: number[] = [];
-    const ys: number[] = [];
-    for (const d of deposits) {
-      xs.push(d.x - d.radius, d.x + d.radius);
-      ys.push(d.y - d.radius, d.y + d.radius);
-    }
-    for (const n of useGraphStore.getState().nodes) {
-      xs.push(n.position.x, n.position.x + 240);
-      ys.push(n.position.y, n.position.y + 90);
-    }
-    if (xs.length === 0) return;
-    const x = Math.min(...xs);
-    const y = Math.min(...ys);
-    void fitBounds(
-      { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y },
-      { padding: 0.05, duration: 400 },
-    );
-  }, [deposits, fitBounds]);
+
 
   return (
     <NodeFlowContext.Provider value={nodeFlowMap}>
@@ -399,6 +378,7 @@ function Flow() {
         onNodeDragStop={onNodeDragStop}
         onSelectionChange={onSelectionChange}
         isValidConnection={isValidConnection}
+        deleteKeyCode={['Backspace', 'Delete']}
         connectionLineType={ConnectionLineType.SmoothStep}
         selectionOnDrag={true}
         selectionMode={SelectionMode.Partial}
@@ -411,44 +391,40 @@ function Flow() {
           style: { strokeWidth: 3 },
         }}
         fitView
+        minZoom={0.05}
+        maxZoom={2.5}
         proOptions={{ hideAttribution: true }}
       >
         <ViewportPortal>
           <ResourceLayer />
         </ViewportPortal>
-        <Panel position="top-right" className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950/80 p-1.5 shadow-2xl backdrop-blur-md nf-glow-box-orange">
-          {/* Lignes d'accent HUD industrielles */}
-          <div className="nf-hud-corner nf-hud-corner-tl" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.4)', width: '4px', height: '4px' } as React.CSSProperties} />
-          <div className="nf-hud-corner nf-hud-corner-tr" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.4)', width: '4px', height: '4px' } as React.CSSProperties} />
-          <div className="nf-hud-corner nf-hud-corner-bl" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.4)', width: '4px', height: '4px' } as React.CSSProperties} />
-          <div className="nf-hud-corner nf-hud-corner-br" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.4)', width: '4px', height: '4px' } as React.CSSProperties} />
-
-          <button
-            type="button"
-            onClick={onOverview}
-            title="Cadrer tous les gisements et l'usine"
-            className="flex items-center gap-1.5 rounded border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-800/80 px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase font-mono text-zinc-300 hover:text-orange-400 hover:border-orange-500/40 transition-all cursor-pointer"
-          >
-            <OverviewIcon className="h-3.5 w-3.5" />
-            Vue d'ensemble
-          </button>
-          <button
-            type="button"
-            onClick={onRegenerate}
-            title="Génère une nouvelle disposition de gisements (détache les mineurs)"
-            className="flex items-center gap-1.5 rounded border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-800/80 px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase font-mono text-zinc-300 hover:text-orange-400 hover:border-orange-500/40 transition-all cursor-pointer"
-          >
-            <MapIcon className="h-3.5 w-3.5" />
-            Nouvelle carte
-          </button>
+        <Panel position="top-right">
+          <ProgressionStatus />
+        </Panel>
+        <Panel position="top-left">
+          <ContractHUDPanel />
+        </Panel>
+        <Panel position="bottom-left" className="!ml-14 !mb-4 flex flex-col gap-2 pointer-events-none">
+          <div className="bg-zinc-950/80 border border-zinc-800/80 rounded px-2.5 py-1 shadow-lg text-[9px] font-mono text-zinc-400 select-none backdrop-blur-sm flex items-center gap-1.5 pointer-events-auto">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span>VPT_SCALE //</span>
+            <span className="text-amber-400 font-extrabold">{zoomPct}%</span>
+          </div>
         </Panel>
         <Background />
-        <Controls />
+        <Controls>
+          <ControlButton
+            onClick={onNewGame}
+            title="Commencer une nouvelle partie (réinitialise tout)"
+          >
+            <ResetIcon className="w-4.5 h-4.5" />
+          </ControlButton>
+        </Controls>
         <MiniMap
           pannable
           zoomable
           nodeColor={getMiniMapNodeColor}
-          maskColor="transparent"
+          maskColor="rgba(249, 115, 22, 0.08)"
           className="react-flow__minimap"
         />
         <MiniMapDeposits />
@@ -458,6 +434,100 @@ function Flow() {
     </PowerConnectionsContext.Provider>
     </PowerContext.Provider>
     </NodeFlowContext.Provider>
+  );
+}
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function ContractHUDPanel() {
+  const activeContract = useProgressionStore((s) => s.activeContract);
+  const gameMinutesElapsed = useProgressionStore((s) => s.gameMinutesElapsed);
+
+  if (!activeContract) {
+    return (
+      <div className="rounded-lg border border-amber-500/35 bg-zinc-950/80 p-3 shadow-lg select-none backdrop-blur-md max-w-xs pointer-events-auto">
+        {/* HUD Corners */}
+        <div className="nf-hud-corner nf-hud-corner-tl" style={{ '--hud-border-color': 'rgba(245, 158, 11, 0.4)', width: '6px', height: '6px' } as React.CSSProperties} />
+        <div className="nf-hud-corner nf-hud-corner-tr" style={{ '--hud-border-color': 'rgba(245, 158, 11, 0.4)', width: '6px', height: '6px' } as React.CSSProperties} />
+        <div className="nf-hud-corner nf-hud-corner-bl" style={{ '--hud-border-color': 'rgba(245, 158, 11, 0.4)', width: '6px', height: '6px' } as React.CSSProperties} />
+        <div className="nf-hud-corner nf-hud-corner-br" style={{ '--hud-border-color': 'rgba(245, 158, 11, 0.4)', width: '6px', height: '6px' } as React.CSSProperties} />
+
+        <div className="flex items-center gap-2 mb-1">
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
+          <h3 className="text-[10px] font-mono font-bold tracking-widest text-amber-400 uppercase">// ALERTE_CONTRAT</h3>
+        </div>
+        <p className="text-[11px] text-zinc-300 font-medium">Aucun contrat actif en cours.</p>
+        <p className="text-[10px] text-zinc-500 mt-1 leading-normal">
+          Ouvre le menu <span className="text-orange-400 font-bold uppercase">Objectifs (OBJ)</span> à droite pour accepter un contrat client et commencer à gagner des Bolts.
+        </p>
+      </div>
+    );
+  }
+
+  const delivered = contractProgress(activeContract);
+  const pct = Math.min(1, delivered / activeContract.offer.quantity);
+  const percent = Math.round(pct * 100);
+
+  const remainingSeconds = activeContract.deadlineGameMin === Infinity 
+    ? Infinity 
+    : Math.max(0, (activeContract.deadlineGameMin - gameMinutesElapsed) * 60);
+
+  return (
+    <div className="rounded-lg border border-zinc-800/60 bg-zinc-950/90 p-3.5 shadow-lg select-none backdrop-blur-md w-[280px] pointer-events-auto">
+      {/* HUD Corners */}
+      <div className="nf-hud-corner nf-hud-corner-tl" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.4)', width: '6px', height: '6px' } as React.CSSProperties} />
+      <div className="nf-hud-corner nf-hud-corner-tr" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.4)', width: '6px', height: '6px' } as React.CSSProperties} />
+      <div className="nf-hud-corner nf-hud-corner-bl" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.4)', width: '6px', height: '6px' } as React.CSSProperties} />
+      <div className="nf-hud-corner nf-hud-corner-br" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.4)', width: '6px', height: '6px' } as React.CSSProperties} />
+
+      <div className="flex items-center gap-2 mb-2 border-b border-zinc-900 pb-1.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+        <h3 className="text-[10px] font-mono font-bold tracking-widest text-zinc-400 uppercase">// DIRECTIVE_CLIENT</h3>
+        <span className="ml-auto text-[8px] font-mono text-zinc-500 uppercase truncate max-w-[90px]">{activeContract.offer.clientName}</span>
+      </div>
+
+      <div className="flex justify-between items-baseline mb-2">
+        <span className="text-[12px] font-bold text-zinc-100 uppercase tracking-tight truncate max-w-[170px]">{activeContract.offer.itemName}</span>
+        <span className="text-[14px] font-mono font-black text-amber-450 drop-shadow-[0_0_4px_rgba(245,158,11,0.25)]">{percent}%</span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-2.5 w-full overflow-hidden rounded bg-zinc-950 border border-zinc-900 flex items-center px-[1px] mb-3.5">
+        <div
+          className="h-[6px] rounded bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.7)] transition-[width] duration-500"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+
+      {/* Target quantities and countdown timer side by side */}
+      <div className="flex items-center justify-between border-t border-zinc-900/60 pt-2.5">
+        <div className="flex flex-col">
+          <span className="text-[8.5px] font-mono font-bold tracking-wider text-zinc-500 uppercase leading-none">Livraison</span>
+          <span className="text-[12.5px] font-mono font-bold text-zinc-200 tabular-nums mt-1 leading-none">
+            {Math.floor(delivered)} <span className="text-zinc-500 font-medium">/ {activeContract.offer.quantity}</span>
+          </span>
+        </div>
+
+        {remainingSeconds !== Infinity && (
+          <div className="flex flex-col items-end">
+            <span className="text-[8.5px] font-mono font-bold tracking-wider text-zinc-500 uppercase leading-none">Temps Restant</span>
+            <span 
+              className={`font-mono font-black text-[13px] tabular-nums mt-1 leading-none px-2 py-0.5 rounded ${
+                remainingSeconds < 60 
+                  ? 'text-red-400 animate-pulse bg-red-950/50 border border-red-500/30 shadow-[0_0_8px_rgba(239,68,68,0.2)]' 
+                  : 'text-amber-400 bg-amber-500/5 border border-amber-500/10'
+              }`}
+            >
+              {formatTime(remainingSeconds)}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

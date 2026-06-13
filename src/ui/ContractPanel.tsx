@@ -78,6 +78,8 @@ function RiskBadge({ risk }: { risk: ContractRisk }) {
 /** Carte d'une offre proposée (non encore acceptée). */
 function OfferCard({ offer, onAccept }: { offer: ContractOffer; onAccept: () => void }) {
   const s = RISK_STYLE[offer.risk];
+  const itemStock = useProgressionStore((st) => st.itemStock);
+  const stocked = Math.floor(itemStock[offer.itemId] ?? 0);
   return (
     <li className={`relative rounded border ${s.border} ${s.bg} p-3`} data-testid="contract-offer">
       <div className="mb-1 flex items-center justify-between gap-2">
@@ -93,6 +95,11 @@ function OfferCard({ offer, onAccept }: { offer: ContractOffer; onAccept: () => 
           +{offer.reward} <BoltMini className="h-2.5 w-2.5" />
         </span>
       </div>
+      {stocked > 0 && (
+        <p className="mt-1 text-[9px] font-mono text-emerald-400/80" data-testid="offer-stock-hint">
+          Entrepôt : {Math.min(stocked, offer.quantity)}/{offer.quantity} déjà en stock
+        </p>
+      )}
       <div className="mt-1 flex items-center justify-between">
         <span className="font-mono text-[9px] uppercase tracking-wider text-zinc-600">
           {offer.durationMin == null ? 'Pas de délai' : `Délai ${offer.durationMin} min`}
@@ -113,12 +120,13 @@ function OfferCard({ offer, onAccept }: { offer: ContractOffer; onAccept: () => 
 /** Carte du contrat actif (en cours de livraison). */
 function ActiveCard() {
   const active = useProgressionStore((s) => s.activeContract);
-  const cumulativeProduced = useProgressionStore((s) => s.cumulativeProduced);
+  const itemStock = useProgressionStore((s) => s.itemStock);
   const gameMin = useProgressionStore((s) => s.gameMinutesElapsed);
   if (!active) return null;
 
-  const delivered = contractProgress(active, cumulativeProduced);
+  const delivered = contractProgress(active);
   const pct = Math.min(1, delivered / active.offer.quantity);
+  const stocked = Math.floor(itemStock[active.offer.itemId] ?? 0);
   const remaining =
     active.deadlineGameMin === Infinity ? null : Math.max(0, active.deadlineGameMin - gameMin);
   const urgent = remaining != null && remaining < 1.5;
@@ -147,6 +155,11 @@ function ActiveCard() {
           style={{ width: `${Math.round(pct * 100)}%` }}
         />
       </div>
+      {stocked > 0 && (
+        <p className="mt-1 text-[9px] font-mono text-zinc-500" data-testid="contract-stock-hint">
+          Entrepôt : <span className="text-zinc-300 font-bold">{stocked}</span> {active.offer.itemName} prêts à livrer
+        </p>
+      )}
       <div className="mt-2 flex items-center justify-between text-[9px] font-mono uppercase tracking-wider">
         <span className={urgent ? 'text-red-400' : 'text-zinc-500'}>
           {remaining == null ? 'Pas de délai' : `${Math.ceil(remaining)} min restantes`}
@@ -176,8 +189,9 @@ export function ContractPanel() {
 
   return (
     <div className="flex flex-col gap-3" data-testid="contract-panel">
+      <h2 className="sr-only">Objectifs</h2>
       <div className="border-b border-zinc-900 pb-2">
-        <h2 className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">// CONTRATS</h2>
+        <h3 className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">// CONTRATS</h3>
         <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
           {activeContract
             ? 'Livraison en cours. Produis pour honorer le contrat.'

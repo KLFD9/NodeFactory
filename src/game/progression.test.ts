@@ -3,8 +3,11 @@ import {
   RP_RATE_PER_ITEM_PER_MIN,
   LONG_CLOCK_CAP_MIN,
   MILESTONES,
+  STOCK_CAP_PER_ITEM,
+  stockCapForRate,
 } from './balance';
 import {
+  acceptContract,
   allowedAlternateRecipeIds,
   applyOfflineGains,
   applyProductionTick,
@@ -16,6 +19,7 @@ import {
   trySpendBolts,
   type ProgressionState,
 } from './progression';
+import { LAUNCH_CONTRACT } from './contracts';
 
 /** Recettes mock minimales pour tester le filtrage des alternatives. */
 const MOCK_RECIPES = [
@@ -96,6 +100,60 @@ describe('applyProductionTick — accumulation', () => {
   });
 });
 
+describe('applyProductionTick — stock d’entrepôt', () => {
+  it('la production brute s’accumule dans itemStock, au prorata de dt', () => {
+    const s = freshState();
+    const { state } = applyProductionTick(s, {
+      grossProduction: [{ itemId: 'iron-plate', ratePerMin: 20 }],
+      totalOutputPerMin: 20,
+      efficiency: 1,
+      dtMin: 2,
+      nowMs: NOW + 120_000,
+    });
+    // 20/min × 2 min = 40 en stock.
+    expect(state.itemStock['iron-plate']).toBeCloseTo(40, 6);
+  });
+
+  it('le stock est plafonné à STOCK_CAP_PER_ITEM en early game (débit faible)', () => {
+    const s = freshState();
+    const { state } = applyProductionTick(s, {
+      grossProduction: [{ itemId: 'iron-plate', ratePerMin: 20 }],
+      totalOutputPerMin: 20,
+      efficiency: 1,
+      dtMin: 100, // 20 × 100 = 2000, largement au-dessus du plancher
+      nowMs: NOW + 6_000_000,
+    });
+    expect(state.itemStock['iron-plate']).toBe(STOCK_CAP_PER_ITEM);
+  });
+
+  it('le plafond SCALE avec le débit (usine avancée) au-delà du plancher', () => {
+    const s = freshState();
+    const { state } = applyProductionTick(s, {
+      grossProduction: [{ itemId: 'iron-plate', ratePerMin: 1000 }],
+      totalOutputPerMin: 1000,
+      efficiency: 1,
+      dtMin: 10, // 1000 × 10 = 10 000, au-dessus du plafond scalé (1000 × 6 = 6000)
+      nowMs: NOW + 600_000,
+    });
+    expect(state.itemStock['iron-plate']).toBe(stockCapForRate(1000));
+    expect(state.itemStock['iron-plate']).toBeGreaterThan(STOCK_CAP_PER_ITEM);
+  });
+
+  it('un intermédiaire entièrement consommé en aval (surplus net = 0) alimente quand même le stock', () => {
+    // Iron Ingot intégralement transformé en Iron Plate : aucun surplus, mais la
+    // production brute existe bel et bien → le stock doit progresser.
+    const s = freshState();
+    const { state } = applyProductionTick(s, {
+      grossProduction: [{ itemId: 'iron-ingot', ratePerMin: 30 }],
+      totalOutputPerMin: 0,
+      efficiency: 1,
+      dtMin: 2,
+      nowMs: NOW + 120_000,
+    });
+    expect(state.itemStock['iron-ingot']).toBeCloseTo(60, 6);
+  });
+});
+
 describe('applyProductionTick — milestones', () => {
   const m1 = MILESTONES[0]; // ms-iron-ingot-60 → débloque constructor
 
@@ -153,6 +211,38 @@ describe('applyProductionTick — milestones', () => {
     });
     expect(newlyReached.map((m) => m.id)).toContain(m1.id);
     expect(state.reachedMilestones).toContain(m1.id);
+  });
+});
+
+describe('applyProductionTick — contrat livré depuis le stock pré-existant', () => {
+  it('un stock accumulé avant acceptation permet une livraison immédiate', () => {
+    // L'usine a déjà 80 Iron Ingot en stock (surplus accumulé avant l'acceptation).
+    let s = freshState({ itemStock: { 'iron-ingot': 80 } });
+    // Tick à dt=0 pour faire apparaître le contrat de lancement (bootstrap).
+    ({ state: s } = applyProductionTick(s, {
+      grossProduction: [],
+      totalOutputPerMin: 0,
+      efficiency: 1,
+      dtMin: 0,
+      nowMs: NOW,
+    }));
+    expect(s.contractOffers[0]?.id).toBe(LAUNCH_CONTRACT.id);
+
+    // Le joueur accepte le contrat de lancement (60 Iron Ingot).
+    s = acceptContract(s, LAUNCH_CONTRACT.id);
+    expect(s.activeContract?.delivered).toBe(0);
+
+    // Tick suivant : le stock (80) couvre largement la demande (60) → complétion immédiate.
+    const { state: next, contractCompleted } = applyProductionTick(s, {
+      grossProduction: [],
+      totalOutputPerMin: 0,
+      efficiency: 1,
+      dtMin: 0.01,
+      nowMs: NOW + 600,
+    });
+    expect(contractCompleted?.id).toBe(LAUNCH_CONTRACT.id);
+    expect(next.activeContract).toBeNull();
+    expect(next.itemStock['iron-ingot']).toBeCloseTo(20, 6); // 80 − 60
   });
 });
 

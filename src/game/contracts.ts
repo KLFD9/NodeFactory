@@ -121,8 +121,8 @@ export interface ContractOffer {
 
 export interface ActiveContract {
   offer: ContractOffer;
-  /** `cumulativeProduced[itemId]` au moment de l'acceptation (base du compteur de livraison). */
-  acceptedAtProduced: number;
+  /** Quantité déjà livrée (prélevée sur le stock), 0 à l'acceptation. */
+  delivered: number;
   /** `gameMinutesElapsed` à l'acceptation. */
   acceptedAtGameMin: number;
   /** `gameMinutesElapsed` au-delà duquel le contrat échoue (Infinity si pas de deadline). */
@@ -247,30 +247,43 @@ export interface ContractEvents {
 const NO_EVENTS: ContractEvents = { completed: null, failed: null, boltsAwarded: 0, unlock: null };
 
 /** Progression de livraison d'un contrat actif (items livrés depuis l'acceptation, ≥ 0). */
-export function contractProgress(active: ActiveContract, cumulativeProduced: Record<string, number>): number {
-  return Math.max(0, (cumulativeProduced[active.offer.itemId] ?? 0) - active.acceptedAtProduced);
+export function contractProgress(active: ActiveContract): number {
+  return active.delivered;
 }
 
 /**
  * Avance le système de contrats d'un tick (PUR). Gère, dans l'ordre :
+ *  0. la livraison du contrat actif depuis le STOCK disponible (entrepôt) — instantanée
+ *     dans la limite de ce qui est déjà accumulé, le reste suit le débit de production ;
  *  1. la complétion du contrat actif (livraison atteinte → Bolts + réputation + déblocage),
  *  2. son échec (deadline de jeu dépassée → réputation),
  *  3. la (re)génération des offres quand aucun contrat n'est actif et que le lot est périmé.
  *
  * Le contrat de lancement est injecté tant qu'aucun contrat n'a encore été réussi
  * (`contractsCompleted === 0`) : c'est le premier objectif, toujours proposé.
+ *
+ * `itemStock` est consommé au fil de la livraison et renvoyé mis à jour.
  */
 export function advanceContracts(
   slice: ContractSlice,
-  cumulativeProduced: Record<string, number>,
+  itemStock: Record<string, number>,
   gameMinutesElapsed: number,
   producible: ProducibleItem[],
-): { slice: ContractSlice; events: ContractEvents } {
-  // 1 + 2. Contrat actif : complétion ou échec.
+): { slice: ContractSlice; itemStock: Record<string, number>; events: ContractEvents } {
+  // 0 + 1 + 2. Contrat actif : prélèvement sur le stock, puis complétion ou échec.
   if (slice.activeContract) {
-    const active = slice.activeContract;
-    const delivered = contractProgress(active, cumulativeProduced);
-    if (delivered >= active.offer.quantity) {
+    let active = slice.activeContract;
+    let stock = itemStock;
+
+    const remaining = active.offer.quantity - active.delivered;
+    const available = stock[active.offer.itemId] ?? 0;
+    if (remaining > 0 && available > 0) {
+      const take = Math.min(remaining, available);
+      stock = { ...stock, [active.offer.itemId]: available - take };
+      active = { ...active, delivered: active.delivered + take };
+    }
+
+    if (active.delivered >= active.offer.quantity) {
       const reputation = clampReputation(slice.reputation + RISK_PROFILES[active.offer.risk].repWin);
       return {
         slice: {
@@ -280,6 +293,7 @@ export function advanceContracts(
           activeContract: null,
           contractOffers: [],
         },
+        itemStock: stock,
         events: {
           completed: active.offer,
           failed: null,
@@ -292,31 +306,33 @@ export function advanceContracts(
       const reputation = clampReputation(slice.reputation + RISK_PROFILES[active.offer.risk].repLoss);
       return {
         slice: { ...slice, reputation, activeContract: null, contractOffers: [] },
+        itemStock: stock,
         events: { completed: null, failed: active.offer, boltsAwarded: 0, unlock: null },
       };
     }
-    return { slice, events: NO_EVENTS };
+    return { slice: { ...slice, activeContract: active }, itemStock: stock, events: NO_EVENTS };
   }
 
   // 3. Aucun contrat actif : régénérer le lot si vide ou périmé.
   const stale =
     slice.contractOffers.length === 0 ||
     gameMinutesElapsed >= slice.offersGeneratedAtGameMin + CONTRACT_OFFER_TTL_GAME_MIN;
-  if (!stale) return { slice, events: NO_EVENTS };
+  if (!stale) return { slice, itemStock, events: NO_EVENTS };
 
   // Bootstrap : tant qu'aucun contrat n'a été réussi, on présente le contrat de lancement.
   if (slice.contractsCompleted === 0) {
     if (slice.contractOffers.length === 1 && slice.contractOffers[0].id === LAUNCH_CONTRACT.id) {
-      return { slice, events: NO_EVENTS };
+      return { slice, itemStock, events: NO_EVENTS };
     }
     return {
       slice: { ...slice, contractOffers: [LAUNCH_CONTRACT], offersGeneratedAtGameMin: gameMinutesElapsed },
+      itemStock,
       events: NO_EVENTS,
     };
   }
 
   const offers = generateOffers(slice.contractSeed, slice.reputation, producible);
-  if (offers.length === 0) return { slice, events: NO_EVENTS }; // rien à produire encore
+  if (offers.length === 0) return { slice, itemStock, events: NO_EVENTS }; // rien à produire encore
   return {
     slice: {
       ...slice,
@@ -324,19 +340,19 @@ export function advanceContracts(
       contractSeed: (slice.contractSeed + 1) >>> 0,
       offersGeneratedAtGameMin: gameMinutesElapsed,
     },
+    itemStock,
     events: NO_EVENTS,
   };
 }
 
 /**
- * Accepte une offre (PUR) : la transforme en contrat actif, fige le compteur de livraison
- * et calcule la deadline. Renvoie le slice inchangé si l'offre est introuvable ou si un
- * contrat est déjà actif (1 max).
+ * Accepte une offre (PUR) : la transforme en contrat actif (livraison à 0) et calcule
+ * la deadline. Renvoie le slice inchangé si l'offre est introuvable ou si un contrat
+ * est déjà actif (1 max).
  */
 export function acceptOffer(
   slice: ContractSlice,
   offerId: string,
-  cumulativeProduced: Record<string, number>,
   gameMinutesElapsed: number,
 ): ContractSlice {
   if (slice.activeContract) return slice;
@@ -344,7 +360,7 @@ export function acceptOffer(
   if (!offer) return slice;
   const active: ActiveContract = {
     offer,
-    acceptedAtProduced: cumulativeProduced[offer.itemId] ?? 0,
+    delivered: 0,
     acceptedAtGameMin: gameMinutesElapsed,
     deadlineGameMin: offer.durationMin == null ? Infinity : gameMinutesElapsed + offer.durationMin,
   };

@@ -107,6 +107,30 @@ export function shouldShowOfflineRecap(rpGained: number, minutesCredited: number
 }
 
 // ---------------------------------------------------------------------------
+// 2bis. ENTREPÔT — stock par item, alimenté par la production BRUTE (même source
+//    que les milestones), y compris les intermédiaires entièrement consommés en
+//    aval. Permet aux contrats de livrer instantanément depuis ce qui est déjà
+//    accumulé, au lieu d'exiger de la production future.
+//
+//    Plafonné, pour garder un sens à « stock » (≠ compteur infini), mais le
+//    plafond SCALE avec le débit courant de l'item (« pas de faux nombres ») :
+//    ~ la taille d'un contrat sur ce débit (STOCK_BUFFER_MINUTES ≈ durée d'un
+//    contrat « serré »). Un plancher protège l'early game où les débits sont
+//    encore faibles (30/min × 6 ≈ 180 < plancher 200).
+// ---------------------------------------------------------------------------
+
+/** Plancher de stock par item (unités) — garantit une réserve minimale en early game. */
+export const STOCK_CAP_PER_ITEM = 200;
+
+/** Durée (minutes de production) que la réserve peut contenir, au-delà du plancher. */
+export const STOCK_BUFFER_MINUTES = 6;
+
+/** Capacité de stock pour un item produit à `ratePerMin` : scale avec le débit, jamais sous le plancher. */
+export function stockCapForRate(ratePerMin: number): number {
+  return Math.max(STOCK_CAP_PER_ITEM, ratePerMin * STOCK_BUFFER_MINUTES);
+}
+
+// ---------------------------------------------------------------------------
 // 3. COURBES IDLE
 //    coût(N)  = baseCost × COST_RATIO^N  (×1.15/niveau — pacing contrôlé)
 //    prod(N)  = baseProd × PROD_RATIO^N  (×1.10/niveau — perceptible)

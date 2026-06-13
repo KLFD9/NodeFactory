@@ -9,6 +9,7 @@ import { useGraphStore } from '@/store/useGraphStore';
 
 /** Données décoratives portées par une arête (calculées dans GraphCanvas). */
 export interface BeltEdgeData extends Record<string, unknown> {
+  itemId?: string;
   itemName?: string;
   rate?: number;
   tierLabel?: string;
@@ -22,10 +23,104 @@ function beltFlowDuration(rate: number): number {
   return Math.max(0.35, Math.min(3.0, 2.5 / speed));
 }
 
+/** Rendu graphique unique pour chaque minerai et lingot. */
+function renderItemGraphic(itemId: string) {
+  switch (itemId) {
+    case 'iron-ingot':
+      return (
+        <g>
+          {/* Top face */}
+          <polygon points="-5,-2.5 0,-5 5,-2.5 0,0" fill="#e4e4e7" stroke="#a1a1aa" strokeWidth="0.5" />
+          {/* Left face */}
+          <polygon points="-5,-2.5 0,0 0,5 -5,2.5" fill="#a1a1aa" stroke="#71717a" strokeWidth="0.5" />
+          {/* Right face */}
+          <polygon points="0,0 5,-2.5 5,2.5 0,5" fill="#71717a" stroke="#52525b" strokeWidth="0.5" />
+        </g>
+      );
+    case 'copper-ingot':
+      return (
+        <g>
+          {/* Top face */}
+          <polygon points="-5,-2.5 0,-5 5,-2.5 0,0" fill="#fdba74" stroke="#f97316" strokeWidth="0.5" />
+          {/* Left face */}
+          <polygon points="-5,-2.5 0,0 0,5 -5,2.5" fill="#ea580c" stroke="#c2410c" strokeWidth="0.5" />
+          {/* Right face */}
+          <polygon points="0,0 5,-2.5 5,2.5 0,5" fill="#c2410c" stroke="#9a3412" strokeWidth="0.5" />
+        </g>
+      );
+    case 'steel':
+      return (
+        <g>
+          {/* Top face */}
+          <polygon points="-5,-2.5 0,-5 5,-2.5 0,0" fill="#cbd5e1" stroke="#64748b" strokeWidth="0.5" />
+          {/* Left face */}
+          <polygon points="-5,-2.5 0,0 0,5 -5,2.5" fill="#64748b" stroke="#475569" strokeWidth="0.5" />
+          {/* Right face */}
+          <polygon points="0,0 5,-2.5 5,2.5 0,5" fill="#475569" stroke="#334155" strokeWidth="0.5" />
+        </g>
+      );
+    case 'iron-ore':
+      return (
+        <g>
+          <ellipse cx="0" cy="2" rx="4.5" ry="1.8" fill="rgba(0,0,0,0.5)" />
+          <polygon points="-3.5,-1.5 0,-4.5 3.5,-2.5 4.5,1.5 1,3.5 -2.5,2.5" fill="#3f3f46" />
+          <polygon points="-3.5,-1.5 0,-4.5 1,1 -2.5,2.5" fill="#52525b" />
+          <polygon points="0,-4.5 3.5,-2.5 2.5,0 1,1" fill="#78350f" />
+          <polygon points="1,1 2.5,0 4.5,1.5 1,3.5" fill="#9a3412" />
+        </g>
+      );
+    case 'copper-ore':
+      return (
+        <g>
+          <ellipse cx="0" cy="2" rx="4.5" ry="1.8" fill="rgba(0,0,0,0.5)" />
+          <polygon points="-3.5,-2.5 -1,-4.5 2.5,-3.5 4.5,1 2,3.5 -2,2.5" fill="#047857" />
+          <polygon points="-3.5,-2.5 -1,-4.5 0,1 -2,2.5" fill="#065f46" />
+          <polygon points="-1,-4.5 2.5,-3.5 1.5,0 0,1" fill="#ea580c" />
+          <polygon points="0,1 1.5,0 4.5,1 2,3.5" fill="#fb923c" />
+        </g>
+      );
+    case 'limestone':
+      return (
+        <g>
+          <ellipse cx="0" cy="2" rx="4.5" ry="1.8" fill="rgba(0,0,0,0.5)" />
+          <polygon points="-3.5,-1.5 0,-4.5 3.5,-2.5 4.5,1 1.8,3.5 -1.8,2.5" fill="#e4e4e7" />
+          <polygon points="-3.5,-1.5 0,-4.5 1,1 -1.8,2.5" fill="#d4d4d8" />
+          <polygon points="0,-4.5 3.5,-2.5 2.5,0 1,1" fill="#fafafa" />
+          <polygon points="1,1 2.5,0 4.5,1 1.8,3.5" fill="#a1a1aa" />
+        </g>
+      );
+    case 'coal':
+      return (
+        <g>
+          <ellipse cx="0" cy="2" rx="4.5" ry="1.8" fill="rgba(0,0,0,0.5)" />
+          <polygon points="-3.5,-2.5 -1,-4.5 2.5,-3.5 4.5,1 2,3.5 -2,2.5" fill="#18181b" />
+          <polygon points="-3.5,-2.5 -1,-4.5 0,1 -2,2.5" fill="#09090b" />
+          <polygon points="-1,-4.5 2.5,-3.5 1.5,0 0,1" fill="#27272a" />
+          <polygon points="0,1 1.5,0 4.5,1 2,3.5" fill="#52525b" />
+        </g>
+      );
+    default:
+      // Crate
+      return (
+        <g>
+          {/* Top face */}
+          <polygon points="-4.5,-2.2 0,-4.5 4.5,-2.2 0,0" fill="#d97706" stroke="#92400e" strokeWidth="0.5" />
+          {/* Left face */}
+          <polygon points="-4.5,-2.2 0,0 0,4.5 -4.5,2.2" fill="#b45309" stroke="#78350f" strokeWidth="0.5" />
+          {/* Right face */}
+          <polygon points="0,0 4.5,-2.2 4.5,2.2 0,4.5" fill="#78350f" stroke="#451a03" strokeWidth="0.5" />
+          {/* Straps */}
+          <line x1="0" y1="-4.5" x2="0" y2="4.5" stroke="#18181b" strokeWidth="0.5" opacity="0.6" />
+          <line x1="-4.5" y1="0" x2="4.5" y2="0" stroke="#18181b" strokeWidth="0.5" opacity="0.6" />
+        </g>
+      );
+  }
+}
+
 /**
  * Arête « convoyeur » : trace le path, affiche le label (item · débit · tier), et expose
  * au survol un bouton **+** qui ouvre une mini context-box pour insérer directement un
- * Splitter ou un Merger sur la ligne (coupe l'arête et intercale le hub).
+ * Splitter ou un Merger sur la ligne.
  */
 export function BeltEdge(props: EdgeProps) {
   const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, style } =
@@ -45,7 +140,6 @@ export function BeltEdge(props: EdgeProps) {
   });
 
   const insert = (buildingId: 'splitter' | 'merger') => {
-    // Place le hub au milieu de l'arête (coords du graphe = celles du label).
     dropBuildingNode(buildingId, { x: labelX - 28, y: labelY - 28 }, 'logistics', id);
     setOpen(false);
   };
@@ -53,67 +147,90 @@ export function BeltEdge(props: EdgeProps) {
   const hasFlow = (data?.rate ?? 0) > 0;
   const flowColor = data?.color ?? '#9ca3af';
   const flowDuration = hasFlow ? beltFlowDuration(data!.rate!) : 0;
-  // Légère atténuation de la piste de base quand les items circulent dessus.
-  const baseStyle = hasFlow ? { ...style, opacity: 0.45 } : style;
+  const baseStyle = hasFlow ? { ...style, opacity: 0.15 } : style;
+
+  // Création d'un flux continu de ressources
+  const numItems = 6;
+  const items = [];
+  if (hasFlow && data?.itemId) {
+    for (let i = 0; i < numItems; i++) {
+      const beginOffset = -((i / numItems) * flowDuration);
+      items.push(
+        <g key={i} style={{ pointerEvents: 'none' }}>
+          {renderItemGraphic(data.itemId)}
+          <animateMotion
+            dur={`${flowDuration}s`}
+            repeatCount="indefinite"
+            path={edgePath}
+            rotate="auto"
+            begin={`${beginOffset}s`}
+          />
+        </g>
+      );
+    }
+  }
 
   return (
     <>
-      {/* Corps du convoyeur : bande large sous la ligne de flux, donne l'épaisseur physique. */}
+      {/* 1. Structure métallique porteuse large */}
       <path
         d={edgePath}
         fill="none"
-        stroke="#1c2127"
-        strokeWidth={9}
+        stroke="#1e222b"
+        strokeWidth={15}
         strokeLinecap="round"
-        opacity={0.85}
         style={{ pointerEvents: 'none' }}
       />
-      {/* Teinte par item : léger lavis de la couleur du flux sur le corps du convoyeur. */}
-      {hasFlow && (
-        <path
-          d={edgePath}
-          fill="none"
-          stroke={flowColor}
-          strokeWidth={9}
-          strokeLinecap="round"
-          opacity={0.12}
-          style={{ pointerEvents: 'none' }}
-        />
-      )}
-      {/* Texture « rouleaux » : segments clairs qui défilent le long du corps du convoyeur. */}
+      {/* 2. Rails de guidage latéraux sombres */}
       <path
         d={edgePath}
         fill="none"
-        stroke="rgba(255,255,255,0.07)"
-        strokeWidth={9}
+        stroke="#0d0f12"
+        strokeWidth={13}
+        strokeLinecap="round"
+        style={{ pointerEvents: 'none' }}
+      />
+      {/* 3. Bande LED lumineuse de couleur du flux (tier) */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke={flowColor}
+        strokeWidth={11.5}
+        strokeLinecap="round"
+        opacity={data?.overloaded ? 1.0 : 0.8}
+        style={{
+          pointerEvents: 'none',
+          filter: data?.overloaded ? 'drop-shadow(0 0 2px #ef4444)' : 'none',
+        }}
+      />
+      {/* 4. Bande centrale en caoutchouc noir */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="#0f1115"
+        strokeWidth={9.5}
+        strokeLinecap="round"
+        style={{ pointerEvents: 'none' }}
+      />
+      {/* 5. Texture « rouleaux/stries » animée */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="rgba(255,255,255,0.06)"
+        strokeWidth={9.5}
         strokeLinecap="butt"
-        strokeDasharray="1 7"
+        strokeDasharray="1 8"
         style={{
           animation: hasFlow ? `belt-ridge-flow ${flowDuration}s linear infinite` : undefined,
           pointerEvents: 'none',
         }}
       />
+      {/* 6. Ligne centrale de liaison de base (React Flow) */}
       <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={baseStyle} />
-      {hasFlow && (
-        <path
-          className="nf-belt-flow"
-          d={edgePath}
-          fill="none"
-          stroke={flowColor}
-          strokeWidth={3}
-          strokeDasharray="3 12"
-          strokeLinecap="round"
-          style={{
-            strokeDashoffset: 0,
-            animation: `belt-flow ${flowDuration}s linear infinite`,
-            filter: data?.overloaded
-              ? 'brightness(1.2) drop-shadow(0 0 3px #ef4444)'
-              : 'brightness(1.35)',
-            opacity: 0.9,
-            pointerEvents: 'none',
-          }}
-        />
-      )}
+
+      {/* 7. Ressources physiques animées en mouvement */}
+      {items}
+
       <EdgeLabelRenderer>
         <div
           className="nodrag nopan group absolute flex flex-col items-center"
@@ -125,11 +242,9 @@ export function BeltEdge(props: EdgeProps) {
           <div className="flex items-center gap-1.5">
             {data?.itemName && (
               <span className="whitespace-nowrap rounded-full bg-zinc-950/95 px-2 py-0.5 text-[10px] font-medium text-zinc-300 ring-1 ring-zinc-800/80 group-hover:ring-zinc-700 transition-all shadow-md flex items-center">
-                {/* Default minimal view */}
                 <span className="font-mono font-bold group-hover:hidden">
                   {data.rate}/m
                 </span>
-                {/* Expanded hover view */}
                 <span className="hidden group-hover:inline-flex items-center gap-1.5 animate-fadeIn">
                   <span className="font-bold text-zinc-200">{data.itemName}</span>
                   <span className="text-zinc-600">•</span>
@@ -182,3 +297,4 @@ export function BeltEdge(props: EdgeProps) {
     </>
   );
 }
+

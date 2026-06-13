@@ -3,13 +3,14 @@ import { useFactoryStore } from '@/store/useFactoryStore';
 import { useGraphStore } from '@/store/useGraphStore';
 import { useProgressionStore } from '@/store/useProgressionStore';
 import { isBuildingUnlocked, isRecipeUnlocked } from '@/game/progression';
-import { computeNodeInfo, recipesForBuilding } from '@/graph/nodeInfo';
+import { computeNodeInfo, recipesForBuilding, machineSpeedMult, MACHINE_UPGRADE_MAX_LEVEL } from '@/graph/nodeInfo';
 import { suggestDownstream } from '@/graph/suggest';
-import { BUILDING_COSTS } from '@/game/balance';
+import { BUILDING_COSTS, machineUpgradeCost } from '@/game/balance';
 import { ItemIcon } from '@/ui/assets';
 import { PURITY_MULTIPLIER, type Purity } from '@/data/types';
 
 const PURITY_LABEL: Record<Purity, string> = { impure: 'Impur', normal: 'Normal', pure: 'Pur' };
+const UPGRADE_RANK_LABEL = ['MK.I', 'MK.II', 'MK.III', 'MK.IV'];
 
 /** Panneau de configuration du node sélectionné. Vide si rien n'est sélectionné. */
 export function Inspector() {
@@ -21,6 +22,7 @@ export function Inspector() {
   const unbindMiner = useGraphStore((s) => s.unbindMiner);
   const addDownstreamNode = useGraphStore((s) => s.addDownstreamNode);
   const duplicateSelection = useGraphStore((s) => s.duplicateSelection);
+  const upgradeNode = useGraphStore((s) => s.upgradeNode);
   const unlockedRecipes = useProgressionStore((s) => s.unlockedRecipes);
   const unlockedBuildings = useProgressionStore((s) => s.unlockedBuildings);
   const bolts = useProgressionStore((s) => s.bolts);
@@ -211,6 +213,70 @@ export function Inspector() {
               <span>{round(f.ratePerMin)}/min</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Section Amélioration */}
+      {!isPole && building.category !== 'logistics' && building.category !== 'power' && (
+        <div className="rounded-md border border-amber-900/40 bg-amber-950/5 p-2 text-xs">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="font-semibold text-zinc-350">Amélioration</span>
+            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-400 border border-amber-500/25">
+              {UPGRADE_RANK_LABEL[node.data.upgradeLevel ?? 0] || 'MK.I'}
+            </span>
+          </div>
+
+          <div className="space-y-1.5 text-[11px] text-zinc-400">
+            <div className="flex justify-between">
+              <span>Multiplicateur cadence</span>
+              <span className="font-mono text-zinc-200">×{machineSpeedMult(node.data.upgradeLevel ?? 0).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Consommation électrique</span>
+              <span className="font-mono text-zinc-200">{round(info.powerMW)} MW</span>
+            </div>
+          </div>
+
+          {(node.data.upgradeLevel ?? 0) < MACHINE_UPGRADE_MAX_LEVEL ? (
+            <div className="mt-3 pt-2.5 border-t border-zinc-800/60">
+              <div className="mb-2 text-[10px] text-zinc-500 uppercase tracking-wide font-medium">Prochain niveau : {UPGRADE_RANK_LABEL[(node.data.upgradeLevel ?? 0) + 1]}</div>
+              <div className="space-y-1.5 text-[11px] text-zinc-400 mb-3">
+                <div className="flex justify-between">
+                  <span>Cadence</span>
+                  <span className="font-mono text-emerald-450">×{machineSpeedMult((node.data.upgradeLevel ?? 0) + 1).toFixed(2)} (+10 %)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Consommation</span>
+                  <span className="font-mono text-amber-450">
+                    {round(building.powerMW * machineSpeedMult((node.data.upgradeLevel ?? 0) + 1))} MW
+                  </span>
+                </div>
+              </div>
+
+              {(() => {
+                const cost = machineUpgradeCost(building.id, node.data.upgradeLevel ?? 0);
+                const affordable = bolts >= cost;
+                return (
+                  <button
+                    type="button"
+                    disabled={!affordable}
+                    onClick={() => upgradeNode(node.id)}
+                    className="nf-upgrade-btn-juicy w-full flex items-center justify-center gap-1.5 rounded-md border border-amber-600/50 bg-amber-950/25 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Améliorer · {cost} Bolts
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3">
+                      <path d="M12 2 20.66 7v10L12 22 3.34 17V7L12 2Z" />
+                      <circle cx="12" cy="12" r="3.5" />
+                    </svg>
+                  </button>
+                );
+              })()}
+            </div>
+          ) : (
+            <div className="mt-2 text-center text-[10px] text-emerald-450 font-semibold uppercase tracking-wider">
+              Niveau maximum atteint
+            </div>
+          )}
         </div>
       )}
 

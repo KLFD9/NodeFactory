@@ -192,3 +192,45 @@ describe('useGraphStore — copier/coller facture les AP comme une pose (anti-du
     expect(useProgressionStore.getState().bolts).toBe(40); // 50 - (5 + 5)
   });
 });
+
+describe('useGraphStore — remboursement de Bolts via onNodesChange (suppression clavier)', () => {
+  beforeEach(() => {
+    useGraphStore.setState({ nodes: [], edges: [], selectedNodeId: null, clipboard: null });
+    useProgressionStore.setState({ bolts: 0 });
+  });
+
+  it('rembourse le coût de base de la machine quand elle est supprimée via onNodesChange', () => {
+    const s = node('A', 'smelter');
+    useGraphStore.setState({ nodes: [s] });
+
+    useGraphStore.getState().onNodesChange([{ type: 'remove', id: 'A' }]);
+
+    expect(useGraphStore.getState().nodes).toHaveLength(0);
+    expect(useProgressionStore.getState().bolts).toBe(10); // Coût du smelter = 10 Bolts
+  });
+
+  it('rembourse le coût de base + les améliorations (upgrades) de la machine', () => {
+    const s = { ...node('A', 'smelter'), data: { buildingId: 'smelter', upgradeLevel: 2 } };
+    useGraphStore.setState({ nodes: [s] });
+
+    // Coût smelter = 10. Upgrade level 0 -> 1 = 25. Upgrade level 1 -> 2 = 40. Total = 75.
+    useGraphStore.getState().onNodesChange([{ type: 'remove', id: 'A' }]);
+
+    expect(useGraphStore.getState().nodes).toHaveLength(0);
+    expect(useProgressionStore.getState().bolts).toBe(75);
+  });
+
+  it('gère la suppression de plusieurs machines à la fois', () => {
+    const s1 = node('A', 'smelter');
+    const s2 = node('B', 'splitter'); // 5 Bolts
+    useGraphStore.setState({ nodes: [s1, s2] });
+
+    useGraphStore.getState().onNodesChange([
+      { type: 'remove', id: 'A' },
+      { type: 'remove', id: 'B' }
+    ]);
+
+    expect(useGraphStore.getState().nodes).toHaveLength(0);
+    expect(useProgressionStore.getState().bolts).toBe(15);
+  });
+});

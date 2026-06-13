@@ -163,7 +163,34 @@ export const useGraphStore = create<GraphState>()(
   generation: 0,
 
   onNodesChange: (changes) =>
-    set((state) => ({ nodes: applyNodeChanges(changes, state.nodes) })),
+    set((state) => {
+      let refundTotal = 0;
+      for (const change of changes) {
+        if (change.type === 'remove') {
+          const node = state.nodes.find((n) => n.id === change.id);
+          if (node) {
+            let refund = BUILDING_COSTS[node.data.buildingId] ?? 0;
+            const level = node.data.upgradeLevel ?? 0;
+            for (let l = 0; l < level; l++) {
+              refund += machineUpgradeCost(node.data.buildingId, l);
+            }
+            refundTotal += refund;
+          }
+        }
+      }
+      if (refundTotal > 0) {
+        useProgressionStore.setState((s) => ({ bolts: s.bolts + refundTotal }));
+      }
+      const nextNodes = applyNodeChanges(changes, state.nodes);
+      let selectedNodeId = state.selectedNodeId;
+      if (changes.some((c) => c.type === 'remove' && c.id === selectedNodeId)) {
+        selectedNodeId = null;
+      }
+      return {
+        nodes: nextNodes,
+        selectedNodeId,
+      };
+    }),
 
   onEdgesChange: (changes) =>
     set((state) => ({ edges: applyEdgeChanges(changes, state.edges) })),
@@ -304,11 +331,24 @@ export const useGraphStore = create<GraphState>()(
     }),
 
   deleteNode: (id) =>
-    set((state) => ({
-      nodes: state.nodes.filter((n) => n.id !== id),
-      edges: state.edges.filter((e) => e.source !== id && e.target !== id),
-      selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
-    })),
+    set((state) => {
+      const node = state.nodes.find((n) => n.id === id);
+      if (node) {
+        let refund = BUILDING_COSTS[node.data.buildingId] ?? 0;
+        const level = node.data.upgradeLevel ?? 0;
+        for (let l = 0; l < level; l++) {
+          refund += machineUpgradeCost(node.data.buildingId, l);
+        }
+        if (refund > 0) {
+          useProgressionStore.setState((s) => ({ bolts: s.bolts + refund }));
+        }
+      }
+      return {
+        nodes: state.nodes.filter((n) => n.id !== id),
+        edges: state.edges.filter((e) => e.source !== id && e.target !== id),
+        selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
+      };
+    }),
 
   selectNode: (selectedNodeId) =>
     set((state) => ({

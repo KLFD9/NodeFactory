@@ -271,6 +271,20 @@ body,
   z-index: 5;
   transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
+
+.react-flow__handle-left.nf-handle-style {
+  left: -6px !important;
+}
+.react-flow__handle-right.nf-handle-style {
+  right: -6px !important;
+}
+.react-flow__handle-top.nf-handle-style {
+  top: -6px !important;
+}
+.react-flow__handle-bottom.nf-handle-style {
+  bottom: -6px !important;
+}
+
 .react-flow__handle.nf-handle-style:hover {
   width: 16px !important;
   height: 16px !important;
@@ -278,12 +292,41 @@ body,
   box-shadow: 0 0 10px 2px var(--handle-color-glow, rgba(249, 115, 22, 0.6)) !important;
   z-index: 10;
 }
+.react-flow__handle-left.nf-handle-style:hover {
+  left: -8px !important;
+}
+.react-flow__handle-right.nf-handle-style:hover {
+  right: -8px !important;
+}
+.react-flow__handle-top.nf-handle-style:hover {
+  top: -8px !important;
+}
+.react-flow__handle-bottom.nf-handle-style:hover {
+  bottom: -8px !important;
+}
+
 .react-flow__handle.nf-handle-style.connectingfrom,
 .react-flow__handle.nf-handle-style.connectingto {
   width: 16px !important;
   height: 16px !important;
   scale: 1 !important;
   box-shadow: 0 0 10px 3px var(--handle-color-glow, rgba(16, 185, 129, 0.6)) !important;
+}
+.react-flow__handle-left.nf-handle-style.connectingfrom,
+.react-flow__handle-left.nf-handle-style.connectingto {
+  left: -8px !important;
+}
+.react-flow__handle-right.nf-handle-style.connectingfrom,
+.react-flow__handle-right.nf-handle-style.connectingto {
+  right: -8px !important;
+}
+.react-flow__handle-top.nf-handle-style.connectingfrom,
+.react-flow__handle-top.nf-handle-style.connectingto {
+  top: -8px !important;
+}
+.react-flow__handle-bottom.nf-handle-style.connectingfrom,
+.react-flow__handle-bottom.nf-handle-style.connectingto {
+  bottom: -8px !important;
 }
 
 /* Breathing pulse animation for HUD targeting brackets */
@@ -384,10 +427,11 @@ body,
   flex-direction: column;
   gap: 4px;
   background: rgba(18, 18, 24, 0.85) !important;
-  border: 1px solid rgba(63, 63, 70, 0.4) !important;
+  border: 1px solid rgba(249, 115, 22, 0.2) !important;
   border-radius: 8px !important;
   padding: 4px !important;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.08),
+              0 10px 25px -5px rgba(0, 0, 0, 0.6), 
               inset 0 1px 1px 0 rgba(255, 255, 255, 0.05) !important;
   backdrop-filter: blur(8px) !important;
 }
@@ -437,9 +481,10 @@ body,
 /* ── React Flow MiniMap Custom Styling ── */
 .react-flow__minimap {
   background: rgba(18, 18, 24, 0.85) !important;
-  border: 1px solid rgba(63, 63, 70, 0.4) !important;
+  border: 1px solid rgba(249, 115, 22, 0.25) !important;
   border-radius: 8px !important;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 
+  box-shadow: 0 0 16px rgba(249, 115, 22, 0.08),
+              0 10px 25px -5px rgba(0, 0, 0, 0.6), 
               inset 0 1px 1px 0 rgba(255, 255, 255, 0.05) !important;
   overflow: hidden !important;
   pointer-events: auto !important; /* Force panel container to receive events */
@@ -675,7 +720,7 @@ body,
     inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
     0 0 12px 1px rgba(249, 115, 22, 0.08) !important;
   border-radius: 12px !important;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 .nf-smelter-node.react-flow__node-selected,
@@ -884,4 +929,220 @@ body,
   animation: smelter-chimney-spark 1.6s ease-out infinite;
   animation-delay: var(--spark-delay, 0s);
 }
+
+/* ── Constructor Machine Custom Styles ── */
+.nf-constructor-node {
+  background: #090e14 !important;
+  border: 1px solid rgba(56, 189, 248, 0.25) !important;
+  box-shadow: 
+    0 12px 36px -12px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
+    0 0 12px 1px rgba(56, 189, 248, 0.08) !important;
+  border-radius: 12px !important;
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.nf-constructor-node.react-flow__node-selected,
+.nf-constructor-node.nf-node-selected-glow {
+  border-color: #38bdf8 !important;
+  box-shadow: 
+    0 0 0 1px #38bdf8,
+    0 0 20px 3px rgba(56, 189, 248, 0.35),
+    0 12px 36px -12px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08) !important;
+  transform: scale(1.01);
+}
+
+/* Blueprint hologrid screen */
+.nf-constructor-screen {
+  background-color: #03070c;
+  background-image: 
+    linear-gradient(rgba(56, 189, 248, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.08) 1px, transparent 1px);
+  background-size: 5px 5px;
+  border: 1px solid rgba(56, 189, 248, 0.15);
+  box-shadow: inset 0 0 8px rgba(56, 189, 248, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Constructor mechanical animations */
+@keyframes constructor-stamp {
+  0%, 100% { transform: translateY(-3px); }
+  50% { transform: translateY(4px); }
+}
+
+@keyframes constructor-clamp-left {
+  0%, 100% { transform: translateX(-2px); }
+  50% { transform: translateX(2px); }
+}
+
+@keyframes constructor-clamp-right {
+  0%, 100% { transform: translateX(2px); }
+  50% { transform: translateX(-2px); }
+}
+
+@keyframes constructor-blueprint-pulse {
+  0%, 100% { opacity: 0.25; filter: brightness(1); }
+  50% { opacity: 0.5; filter: brightness(1.2); }
+}
+
+.animate-constructor-stamp {
+  animation: constructor-stamp 1.2s ease-in-out infinite;
+}
+
+.animate-constructor-clamp-l {
+  animation: constructor-clamp-left 1.2s ease-in-out infinite;
+}
+
+.animate-constructor-clamp-r {
+  animation: constructor-clamp-right 1.2s ease-in-out infinite;
+}
+
+.animate-constructor-pulse {
+  animation: constructor-blueprint-pulse 3s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-constructor-stamp,
+  .animate-constructor-clamp-l,
+  .animate-constructor-clamp-r,
+  .animate-constructor-pulse {
+    animation: none !important;
+  }
+}
+
+/* ── Coal Generator Machine Custom Styles ── */
+.nf-generator-node {
+  background: #060c0a !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  box-shadow: 
+    0 12px 36px -12px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
+    0 0 12px 1px rgba(16, 185, 129, 0.08) !important;
+  border-radius: 12px !important;
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.nf-generator-node.react-flow__node-selected,
+.nf-generator-node.nf-node-selected-glow {
+  border-color: #10b981 !important;
+  box-shadow: 
+    0 0 0 1px #10b981,
+    0 0 20px 3px rgba(16, 185, 129, 0.35),
+    0 12px 36px -12px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08) !important;
+  transform: scale(1.01);
+}
+
+/* Generator combustion chamber */
+.nf-generator-furnace {
+  background: #050505;
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.85);
+  position: relative;
+  overflow: hidden;
+}
+
+@keyframes generator-turbine-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes generator-fire-flicker {
+  0%, 100% { opacity: 0.75; filter: brightness(1.0) contrast(1.0); }
+  50% { opacity: 0.95; filter: brightness(1.25) contrast(1.15); }
+}
+
+.animate-generator-turbine {
+  animation: generator-turbine-spin var(--turbine-speed, 2.5s) linear infinite;
+}
+
+.animate-generator-fire {
+  animation: generator-fire-flicker 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-generator-turbine,
+  .animate-generator-fire {
+    animation: none !important;
+  }
+  .animate-generator-turbine {
+    transform: rotate(30deg);
+  }
+}
+
+/* ── Bouton Améliorer ultra juicy & animations de cartes ── */
+.nf-upgrade-btn-juicy {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.nf-upgrade-btn-juicy:not(:disabled):hover {
+  scale: 1.05;
+  border-color: #fbbf24;
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.45);
+  color: #fff;
+  background: linear-gradient(135deg, rgba(245,158,11,0.2) 0%, rgba(217,119,6,0.2) 100%);
+}
+
+.nf-upgrade-btn-juicy:not(:disabled):active {
+  scale: 0.90;
+  box-shadow: 0 0 5px rgba(245, 158, 11, 0.2);
+}
+
+/* Shimmer effect inside the juicy button */
+@keyframes nf-shimmer {
+  0% {
+    left: -75%;
+  }
+  100% {
+    left: 125%;
+  }
+}
+.nf-upgrade-btn-juicy::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -75%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.25) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: skewX(-25deg);
+  transition: 0.75s;
+  pointer-events: none;
+}
+.nf-upgrade-btn-juicy:not(:disabled):hover::after {
+  animation: nf-shimmer 1.2s infinite;
+}
+
+/* Card upgrade pop & flash */
+@keyframes nf-upgrade-pop {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(245, 158, 11, 0);
+  }
+  30% {
+    transform: scale(1.05);
+    box-shadow: 0 0 40px 10px rgba(245, 158, 11, 0.7), inset 0 0 20px rgba(245, 158, 11, 0.4);
+    border-color: #fbbf24 !important;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.nf-node-upgrade-pop {
+  animation: nf-upgrade-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+  border-color: #fbbf24 !important;
+  z-index: 50 !important;
+}
+
+
 
