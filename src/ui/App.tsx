@@ -7,6 +7,8 @@ import { computeFactory } from '@/graph/computeFactory';
 import { milestoneProgress, nextMilestone } from '@/game/progression';
 import { Palette } from './Palette';
 import { MilestonePanel } from './MilestonePanel';
+import { ContractPanel } from './ContractPanel';
+import { ContractToast } from './ContractToast';
 import { GraphCanvas } from './GraphCanvas';
 import { Inspector } from './Inspector';
 import { FactorySummaryPanel } from './FactorySummaryPanel';
@@ -294,7 +296,16 @@ export function App() {
                 <div className="nf-hud-corner nf-hud-corner-br" style={{ '--hud-border-color': 'rgba(249, 115, 22, 0.5)' } as React.CSSProperties} />
 
                 <div className="overflow-y-auto flex-1 pr-1">
-                  {leftPanel === 'milestones' ? <MilestonePanel /> : <Palette />}
+                  {leftPanel === 'milestones' ? (
+                    <div className="flex flex-col gap-5">
+                      <ContractPanel />
+                      <div className="border-t border-zinc-900 pt-4">
+                        <MilestonePanel />
+                      </div>
+                    </div>
+                  ) : (
+                    <Palette />
+                  )}
                 </div>
               </div>
             )}
@@ -339,6 +350,7 @@ export function App() {
 
         <StatusBar />
         <UnlockToast />
+        <ContractToast />
         <PlacementDeniedToast />
         <OfflineRecapModal />
         <WelcomeModal />

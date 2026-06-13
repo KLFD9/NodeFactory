@@ -19,6 +19,14 @@ import {
   prestigeMultiplier,
   type MilestoneDefinition,
 } from './balance';
+import {
+  advanceContracts,
+  acceptOffer,
+  type ActiveContract,
+  type ContractOffer,
+  type ContractSlice,
+  type ProducibleItem,
+} from './contracts';
 
 // ---------------------------------------------------------------------------
 // État sérialisable de la progression
@@ -49,6 +57,22 @@ export interface ProgressionState {
   welcomeSeen: boolean;
   /** Le tutoriel a été passé manuellement (il disparaît de lui-même après M1). */
   tutorialDismissed: boolean;
+
+  // --- Contrats (l'objectif vivant + source de Bolts) ---
+  /** Minutes de JEU ACTIF écoulées — l'horloge des deadlines de contrat (n'avance qu'en jeu). */
+  gameMinutesElapsed: number;
+  /** Réputation client [−3, +3]. */
+  reputation: number;
+  /** Nombre de contrats réussis (le 1er fait basculer du contrat de lancement au procédural). */
+  contractsCompleted: number;
+  /** Contrat en cours (1 max), ou null. */
+  activeContract: ActiveContract | null;
+  /** Offres actuellement présentées. */
+  contractOffers: ContractOffer[];
+  /** Graine du prochain lot d'offres. */
+  contractSeed: number;
+  /** `gameMinutesElapsed` à la génération du lot d'offres courant. */
+  offersGeneratedAtGameMin: number;
 }
 
 /** État de départ : tout à zéro, horloge calée sur maintenant. */
@@ -66,6 +90,26 @@ export function initialProgression(nowMs: number = Date.now()): ProgressionState
     prestigeCount: 0,
     welcomeSeen: false,
     tutorialDismissed: false,
+    gameMinutesElapsed: 0,
+    reputation: 0,
+    contractsCompleted: 0,
+    activeContract: null,
+    contractOffers: [],
+    // Graine dérivée de l'horloge de création : carte de contrats variée d'une partie à l'autre.
+    contractSeed: (nowMs >>> 0) || 1,
+    offersGeneratedAtGameMin: 0,
+  };
+}
+
+/** Extrait la tranche « contrats » de l'état (pour les fonctions pures de contracts.ts). */
+function contractSliceOf(s: ProgressionState): ContractSlice {
+  return {
+    reputation: s.reputation,
+    contractsCompleted: s.contractsCompleted,
+    activeContract: s.activeContract,
+    contractOffers: s.contractOffers,
+    contractSeed: s.contractSeed,
+    offersGeneratedAtGameMin: s.offersGeneratedAtGameMin,
   };
 }
 
@@ -98,6 +142,8 @@ export interface TickInput {
   dtMin: number;
   /** Timestamp courant (ms). */
   nowMs: number;
+  /** Items réellement produits (débit > 0), avec leur nom — base des contrats procéduraux. */
+  producibleItems?: ProducibleItem[];
 }
 
 export interface TickResult {
@@ -106,6 +152,10 @@ export interface TickResult {
   newlyReached: MilestoneDefinition[];
   /** RP gagnés pendant ce tick. */
   rpGained: number;
+  /** Contrat réussi ce tick (notification + Bolts déjà crédités). */
+  contractCompleted: ContractOffer | null;
+  /** Contrat échoué ce tick (deadline dépassée). */
+  contractFailed: ContractOffer | null;
 }
 
 /** Applique un débloquage à l'état (immuable, dédupliqué). */
@@ -166,6 +216,10 @@ export function applyProductionTick(state: ProgressionState, input: TickInput): 
   const rpRatePerMin = baseRpRate * prestigeMultiplier(state.prestigeCount);
   const rpGained = rpRatePerMin * safeDtMin;
 
+  // L'horloge des contrats n'avance qu'en jeu actif (cohérent avec le compteur de livraison
+  // qui ne progresse que pendant la production — pas de punition pendant l'absence).
+  const gameMinutesElapsed = state.gameMinutesElapsed + safeDtMin;
+
   let next: ProgressionState = {
     ...state,
     cumulativeProduced,
@@ -173,6 +227,7 @@ export function applyProductionTick(state: ProgressionState, input: TickInput): 
     researchPoints: state.researchPoints + rpGained,
     lastSeenMs: nowMs,
     lastRpRatePerMin: rpRatePerMin,
+    gameMinutesElapsed,
   };
 
   // 3. Milestones nouvellement franchis → déblocages.
@@ -190,7 +245,34 @@ export function applyProductionTick(state: ProgressionState, input: TickInput): 
     next = { ...withUnlocks, reachedMilestones: reached };
   }
 
-  return { state: next, newlyReached, rpGained };
+  // 4. Contrats : complétion (Bolts + réputation + déblocage), échec, ou rafraîchissement des offres.
+  const { slice, events } = advanceContracts(
+    contractSliceOf(next),
+    next.cumulativeProduced,
+    gameMinutesElapsed,
+    input.producibleItems ?? [],
+  );
+  next = {
+    ...next,
+    reputation: slice.reputation,
+    contractsCompleted: slice.contractsCompleted,
+    activeContract: slice.activeContract,
+    contractOffers: slice.contractOffers,
+    contractSeed: slice.contractSeed,
+    offersGeneratedAtGameMin: slice.offersGeneratedAtGameMin,
+    bolts: next.bolts + events.boltsAwarded,
+  };
+  if (events.unlock?.type === 'building' && !next.unlockedBuildings.includes(events.unlock.id)) {
+    next = { ...next, unlockedBuildings: [...next.unlockedBuildings, events.unlock.id] };
+  }
+
+  return {
+    state: next,
+    newlyReached,
+    rpGained,
+    contractCompleted: events.completed,
+    contractFailed: events.failed,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -211,6 +293,25 @@ export function trySpendBolts(state: ProgressionState, cost: number): SpendResul
   if (cost <= 0) return { state, spent: true };
   if (state.bolts < cost) return { state, spent: false };
   return { state: { ...state, bolts: state.bolts - cost }, spent: true };
+}
+
+// ---------------------------------------------------------------------------
+// Contrats — acceptation (le reste du cycle de vie vit dans le tick)
+// ---------------------------------------------------------------------------
+
+/**
+ * Accepte une offre de contrat (1 max). Fige le compteur de livraison sur la production
+ * cumulée actuelle et calcule la deadline en minutes de jeu. État inchangé si l'offre est
+ * introuvable ou si un contrat est déjà actif.
+ */
+export function acceptContract(state: ProgressionState, offerId: string): ProgressionState {
+  const slice = acceptOffer(
+    contractSliceOf(state),
+    offerId,
+    state.cumulativeProduced,
+    state.gameMinutesElapsed,
+  );
+  return { ...state, activeContract: slice.activeContract, contractOffers: slice.contractOffers };
 }
 
 // ---------------------------------------------------------------------------

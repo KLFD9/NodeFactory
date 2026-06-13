@@ -40,8 +40,23 @@ export function useProgressionTick(): void {
       lastTime = now;
 
       const gameData = useFactoryStore.getState().gameData;
+      if (!gameData) return;
       const { nodes, edges } = useGraphStore.getState();
-      if (!gameData || nodes.length === 0) return;
+
+      // Usine encore vide : on ticke quand même (dt=0) pour faire vivre les contrats
+      // (le contrat de lancement doit apparaître avant toute production).
+      if (nodes.length === 0) {
+        useProgressionStore.getState().tick({
+          grossProduction: [],
+          nodeProductions: [],
+          totalOutputPerMin: 0,
+          efficiency: 1,
+          dtMin: 0,
+          nowMs: now,
+          producibleItems: [],
+        });
+        return;
+      }
 
       const summary = computeFactory(nodes, edges, gameData);
       const outThroughput = summary.surplus.reduce((s, f) => s + f.ratePerMin, 0);
@@ -64,6 +79,12 @@ export function useProgressionTick(): void {
         }
       }
 
+      // Items réellement produits (débit > 0) + leur nom → base des contrats procéduraux.
+      const itemName = (id: string) => gameData.items.find((i) => i.id === id)?.name ?? id;
+      const producibleItems = summary.production
+        .filter((f) => f.ratePerMin > 0)
+        .map((f) => ({ itemId: f.itemId, itemName: itemName(f.itemId), throughputPerMin: f.ratePerMin }));
+
       useProgressionStore.getState().tick({
         grossProduction: summary.production.map((f) => ({
           itemId: f.itemId,
@@ -74,6 +95,7 @@ export function useProgressionTick(): void {
         efficiency,
         dtMin,
         nowMs: now,
+        producibleItems,
       });
     }, TICK_MS);
 

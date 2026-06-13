@@ -81,8 +81,11 @@ function MilestoneRow({
   // upcoming : visible mais grisé (REC-01 — on voit la suite de l'objectif).
   return (
     <li className="flex items-center gap-2.5 rounded border border-zinc-900 bg-zinc-950/40 px-3 py-2 text-[11px] text-zinc-500">
-      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-zinc-850 bg-zinc-900 text-[9px]">
-        🔒
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-zinc-850 bg-zinc-900 text-zinc-600">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-2.5 w-2.5">
+          <rect x="5" y="11" width="14" height="10" rx="2" />
+          <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+        </svg>
       </span>
       <span className="truncate font-sans font-medium">{reward}</span>
       <span className="ml-auto shrink-0 font-mono text-[9px] text-zinc-600">

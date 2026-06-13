@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import {
+  acceptContract,
   applyOfflineGains,
   applyProductionTick,
   initialProgression,
@@ -8,7 +9,8 @@ import {
   type ProgressionState,
   type TickInput,
 } from '@/game/progression';
-import { STARTING_BOLTS, shouldShowOfflineRecap, type MilestoneDefinition } from '@/game/balance';
+import { STARTING_BOLTS, STARTING_RP, shouldShowOfflineRecap, type MilestoneDefinition } from '@/game/balance';
+import type { ContractOffer } from '@/game/contracts';
 
 /** Récapitulatif des gains hors-ligne, en attente d'affichage (transitoire). */
 export interface OfflineRecap {
@@ -16,6 +18,12 @@ export interface OfflineRecap {
   rpGained: number;
   /** Durée hors-ligne créditée, en minutes (≤ plafond 240). */
   minutesCredited: number;
+}
+
+/** Résultat de contrat à notifier (réussite ou échec), transitoire. */
+export interface ContractResult {
+  offer: ContractOffer;
+  outcome: 'completed' | 'failed';
 }
 
 /**
@@ -34,15 +42,21 @@ interface ProgressionStore extends ProgressionState {
   recentUnlocks: MilestoneDefinition[];
   /** Récap offline à afficher à la reconnexion (null = rien à montrer ; non persisté). */
   offlineRecap: OfflineRecap | null;
+  /** Résultat de contrat à notifier (réussite/échec), transitoire. */
+  contractResult: ContractResult | null;
 
   /** Avance la progression d'un tick depuis l'usine live. */
   tick: (input: TickInput) => void;
   /** Applique les gains hors-ligne depuis la dernière session. Renvoie les RP gagnés. */
   applyOffline: (nowMs?: number) => number;
+  /** Accepte une offre de contrat (1 actif max). */
+  acceptContract: (offerId: string) => void;
   /** Vide la file des déblocages récents (après affichage de la notification). */
   dismissUnlocks: () => void;
   /** Ferme la popup récap offline. */
   dismissOfflineRecap: () => void;
+  /** Ferme la notification de résultat de contrat. */
+  dismissContractResult: () => void;
   /** Marque l'écran d'accueil comme vu (premier lancement). */
   markWelcomeSeen: () => void;
   /** Passe le tutoriel manuellement. */
@@ -59,12 +73,20 @@ export const useProgressionStore = create<ProgressionStore>()(
       ...initialProgression(),
       recentUnlocks: [],
       offlineRecap: null,
+      contractResult: null,
 
       tick: (input) =>
         set((state) => {
-          const { state: next, newlyReached } = applyProductionTick(state, input);
+          const { state: next, newlyReached, contractCompleted, contractFailed } =
+            applyProductionTick(state, input);
+          const result: ContractResult | null = contractCompleted
+            ? { offer: contractCompleted, outcome: 'completed' }
+            : contractFailed
+              ? { offer: contractFailed, outcome: 'failed' }
+              : state.contractResult;
           return {
             ...next,
+            contractResult: result,
             recentUnlocks:
               newlyReached.length > 0
                 ? [...state.recentUnlocks, ...newlyReached]
@@ -85,9 +107,13 @@ export const useProgressionStore = create<ProgressionStore>()(
         return rpGained;
       },
 
+      acceptContract: (offerId) => set((state) => acceptContract(state, offerId)),
+
       dismissUnlocks: () => set({ recentUnlocks: [] }),
 
       dismissOfflineRecap: () => set({ offlineRecap: null }),
+
+      dismissContractResult: () => set({ contractResult: null }),
 
       markWelcomeSeen: () => set({ welcomeSeen: true }),
 
@@ -99,16 +125,16 @@ export const useProgressionStore = create<ProgressionStore>()(
         return spent;
       },
 
-      reset: () => set({ ...initialProgression(), recentUnlocks: [], offlineRecap: null }),
+      reset: () =>
+        set({ ...initialProgression(), recentUnlocks: [], offlineRecap: null, contractResult: null }),
     }),
     {
       name: 'nf-progression',
-      version: 2,
-      // Migration v1 → v2 (refonte monnaies) : les anciens AP deviennent des Points de
-      // Recherche (même origine : la production) ; le joueur reçoit le capital initial de
-      // Bolts pour ne pas être bloqué (sa pose historique a déjà été payée en AP).
+      version: 3,
       migrate: (persisted, version) => {
         const s = persisted as Record<string, unknown>;
+        // v1 → v2 (refonte monnaies) : les anciens AP deviennent des Points de Recherche
+        // (même origine : la production) ; le joueur reçoit le capital initial de Bolts.
         if (version < 2) {
           s.researchPoints = (s.automationPoints as number) ?? 0;
           s.bolts = STARTING_BOLTS;
@@ -116,9 +142,20 @@ export const useProgressionStore = create<ProgressionStore>()(
           delete s.automationPoints;
           delete s.lastApRatePerMin;
         }
+        // v2 → v3 (contrats) : champs par défaut, le cycle de contrats redémarre proprement.
+        if (version < 3) {
+          s.gameMinutesElapsed = 0;
+          s.reputation = 0;
+          s.contractsCompleted = 0;
+          s.activeContract = null;
+          s.contractOffers = [];
+          s.contractSeed = (Date.now() >>> 0) || 1;
+          s.offersGeneratedAtGameMin = 0;
+          if (s.researchPoints == null) s.researchPoints = STARTING_RP;
+        }
         return s as unknown as ProgressionState;
       },
-      // On ne persiste QUE l'état sérialisable, pas les actions ni recentUnlocks.
+      // On ne persiste QUE l'état sérialisable, pas les actions ni les notifications transitoires.
       partialize: (s): ProgressionState => ({
         researchPoints: s.researchPoints,
         bolts: s.bolts,
@@ -132,6 +169,13 @@ export const useProgressionStore = create<ProgressionStore>()(
         prestigeCount: s.prestigeCount,
         welcomeSeen: s.welcomeSeen,
         tutorialDismissed: s.tutorialDismissed,
+        gameMinutesElapsed: s.gameMinutesElapsed,
+        reputation: s.reputation,
+        contractsCompleted: s.contractsCompleted,
+        activeContract: s.activeContract,
+        contractOffers: s.contractOffers,
+        contractSeed: s.contractSeed,
+        offersGeneratedAtGameMin: s.offersGeneratedAtGameMin,
       }),
     },
   ),

@@ -13,7 +13,7 @@ const PALETTE_MIME = 'application/nodefactory-building';
 const STORAGE_KEY = 'nf-progression';
 const WORLD_KEY = 'nf-world';
 
-/** État de progression par défaut (joueur déjà accueilli, tutoriel passé) — schéma v2. */
+/** État de progression par défaut (joueur déjà accueilli, tutoriel passé) — schéma v3. */
 function progressionState(partial: Record<string, unknown> = {}) {
   return {
     researchPoints: 0,
@@ -28,6 +28,13 @@ function progressionState(partial: Record<string, unknown> = {}) {
     prestigeCount: 0,
     welcomeSeen: true,
     tutorialDismissed: true,
+    gameMinutesElapsed: 0,
+    reputation: 0,
+    contractsCompleted: 0,
+    activeContract: null,
+    contractOffers: [],
+    contractSeed: 42,
+    offersGeneratedAtGameMin: 0,
     ...partial,
   };
 }
@@ -40,7 +47,7 @@ function progressionState(partial: Record<string, unknown> = {}) {
 async function seedProgression(
   page: Page,
   partial: Record<string, unknown> = {},
-  version = 2,
+  version = 3,
 ) {
   await page.addInitScript(
     ({ key, state, v }) => {
@@ -288,6 +295,47 @@ test.describe('Améliorations par machine (Bolts)', () => {
     await page.getByTestId('upgrade-node').click();
     await expect(page.getByTestId('upgrade-rank')).toHaveText('MK.II');
     await expect(page.getByTestId('bolts-balance')).toHaveText('15');
+  });
+});
+
+test.describe('Contrats (objectif vivant)', () => {
+  test('contrat de lancement présenté au démarrage (bootstrap)', async ({ page }) => {
+    await seedProgression(page); // contractsCompleted 0, pas d'offre → le tick génère le lancement
+    await gotoReady(page);
+    await openMilestones(page);
+
+    const panel = page.getByTestId('contract-panel');
+    await expect(panel).toContainText('FICSIT Bootstrap');
+    await expect(panel).toContainText('60');
+    await expect(panel.getByTestId('reputation-gauge')).toBeVisible();
+  });
+
+  test('accepter une offre → contrat actif affiché, offres retirées', async ({ page }) => {
+    const offer = {
+      id: 'contract-seed-0',
+      clientName: 'Vortex Labs',
+      flavor: 'Rupture de stock critique sur le Iron Ingot.',
+      itemId: 'iron-ingot',
+      itemName: 'Iron Ingot',
+      quantity: 120,
+      risk: 'standard',
+      reward: 60,
+      durationMin: 8,
+    };
+    // Bootstrap déjà passé (1 contrat réussi) + une offre figée prête à accepter.
+    await seedProgression(page, { contractsCompleted: 1, contractOffers: [offer] });
+    await gotoReady(page);
+    await openMilestones(page);
+
+    await expect(page.getByTestId('contract-offer')).toContainText('Vortex Labs');
+    await page.getByTestId('accept-contract').first().click();
+
+    const active = page.getByTestId('active-contract');
+    await expect(active).toBeVisible();
+    await expect(active).toContainText('Vortex Labs');
+    await expect(active).toContainText('0/120');
+    // L'offre n'est plus proposée (1 contrat actif max).
+    await expect(page.getByTestId('contract-offer')).toHaveCount(0);
   });
 });
 
