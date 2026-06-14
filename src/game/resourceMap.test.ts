@@ -20,7 +20,6 @@ describe('generateResourceMap', () => {
       expect(d.pins.length).toBeGreaterThanOrEqual(1);
       expect(d.pins.length).toBeLessThanOrEqual(3);
       expect(d.radius).toBeGreaterThan(0);
-      expect(d.blobPath).toMatch(/^M /);
       for (const pin of d.pins) {
         expect(Math.hypot(pin.x - d.x, pin.y - d.y)).toBeLessThanOrEqual(d.radius);
       }

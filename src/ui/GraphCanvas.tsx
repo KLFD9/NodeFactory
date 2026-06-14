@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
   Controls,
@@ -15,13 +15,15 @@ import {
   type Connection,
   type NodeTypes,
   type OnSelectionChangeParams,
+  type XYPosition,
 } from '@xyflow/react';
-import type { IsValidConnection } from '@xyflow/react';
+import type { IsValidConnection, OnConnectEnd } from '@xyflow/react';
 import { useFactoryStore } from '@/store/useFactoryStore';
 import { useGraphStore, type MachineNode as MachineNodeType } from '@/store/useGraphStore';
 import { useProgressionStore } from '@/store/useProgressionStore';
 import { useWorldStore } from '@/store/useWorldStore';
 import { contractProgress } from '@/game/contracts';
+import { BiomeLayer } from './world/BiomeLayer';
 import { ResourceLayer } from './world/ResourceLayer';
 import { MiniMapDeposits } from './world/MiniMapDeposits';
 import { computeFactory } from '@/graph/computeFactory';
@@ -88,6 +90,8 @@ function Flow() {
   const selectNode = useGraphStore((s) => s.selectNode);
   const snapMinerToPin = useGraphStore((s) => s.snapMinerToPin);
   const unbindMiner = useGraphStore((s) => s.unbindMiner);
+  const createPoleFromHandle = useGraphStore((s) => s.createPoleFromHandle);
+  const splitPowerEdgeWithPole = useGraphStore((s) => s.splitPowerEdgeWithPole);
   const deposits = useWorldStore((s) => s.deposits);
   const regenerate = useWorldStore((s) => s.regenerate);
 
@@ -163,6 +167,73 @@ function Flow() {
     if (candidates.length === 1) updateNodeData(target.id, { recipeId: candidates[0].id }, gameData);
   }, [storeOnConnect, updateNodeData, gameData]);
 
+  // Drag-to-pole : lâcher un câble énergie dans le vide pose un poteau électrique connecté
+  // au handle d'origine (coût Bolts via createPoleFromHandle).
+  const onConnectEnd = useCallback<OnConnectEnd>(
+    (event, connectionState) => {
+      if (connectionState.toHandle || connectionState.toNode) return;
+      const handle = connectionState.fromHandle;
+      if (!handle?.nodeId) return;
+      const isPower = isPowerSourceHandle(handle.id) || isPowerTargetHandle(handle.id);
+      if (!isPower) return;
+      const point = 'changedTouches' in event ? event.changedTouches[0] : event;
+      const position = screenToFlowPosition({ x: point.clientX, y: point.clientY });
+      createPoleFromHandle(handle.nodeId, handle.id ?? '', handle.type, position);
+    },
+    [screenToFlowPosition, createPoleFromHandle],
+  );
+
+  // Split de câble : clic-glisser depuis un câble énergie existant insère un poteau au
+  // point cliqué et câble une nouvelle sortie vers la cible du drag (handle power-in ou,
+  // dans le vide, un second poteau).
+  const [cableDrag, setCableDrag] = useState<{
+    edgeId: string;
+    startScreen: XYPosition;
+    current: XYPosition;
+  } | null>(null);
+
+  const startCableDrag = useCallback((e: React.MouseEvent, edgeId: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const pos = { x: e.clientX, y: e.clientY };
+    setCableDrag({ edgeId, startScreen: pos, current: pos });
+  }, []);
+
+  useEffect(() => {
+    if (!cableDrag) return;
+
+    const onMove = (e: MouseEvent) => {
+      setCableDrag((d) => (d ? { ...d, current: { x: e.clientX, y: e.clientY } } : d));
+    };
+
+    const onUp = (e: MouseEvent) => {
+      const current = { x: e.clientX, y: e.clientY };
+      const el = document.elementFromPoint(current.x, current.y);
+      let handleEl = el as HTMLElement | null;
+      while (handleEl && !handleEl.dataset?.handleid && handleEl !== document.body) {
+        handleEl = handleEl.parentElement;
+      }
+      const ds = handleEl?.dataset;
+      const clickFlowPos = screenToFlowPosition(cableDrag.startScreen);
+
+      let drop: Parameters<typeof splitPowerEdgeWithPole>[2] = null;
+      if (ds?.handleid === 'power-in' && ds.nodeid) {
+        drop = { kind: 'handle', nodeId: ds.nodeid, handleId: 'power-in' };
+      } else if (el?.closest('.react-flow__pane')) {
+        drop = { kind: 'canvas', position: screenToFlowPosition(current) };
+      }
+      splitPowerEdgeWithPole(cableDrag.edgeId, clickFlowPos, drop);
+      setCableDrag(null);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [cableDrag, screenToFlowPosition, splitPowerEdgeWithPole]);
+
   // Calcule en un seul pass : styles d'arêtes + flux réels par node (pour les indicateurs dans MachineNode).
   const { styledEdges, nodeFlowMap, poweredByNode, powerConnections, powerNetworkByNode } = useMemo(() => {
     const domAttributes = (id: string) =>
@@ -203,7 +274,8 @@ function Flow() {
       // Câble énergie : type d'arête dédié, coloré selon l'état du réseau (déficitaire = rouge).
       if (isPowerSourceHandle(e.sourceHandle) && isPowerTargetHandle(e.targetHandle)) {
         const powered = poweredByNode.get(e.source) ?? poweredByNode.get(e.target) ?? true;
-        return { ...e, type: 'power', domAttributes: domAttributes(e.id), data: { powered } };
+        const onCableMouseDown = (ev: React.MouseEvent) => startCableDrag(ev, e.id);
+        return { ...e, type: 'power', domAttributes: domAttributes(e.id), data: { powered, onCableMouseDown } };
       }
       const plan = plans.get(e.id);
       if (!plan || plan.itemId == null) {
@@ -240,7 +312,7 @@ function Flow() {
     }
 
     return { styledEdges, nodeFlowMap, poweredByNode, powerConnections, powerNetworkByNode };
-  }, [nodes, edges, gameData]);
+  }, [nodes, edges, gameData, startCableDrag]);
 
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -367,6 +439,19 @@ function Flow() {
     <PowerConnectionsContext.Provider value={powerConnections}>
     <PowerNetworkContext.Provider value={powerNetworkByNode}>
     <div className="h-full w-full" onDragOver={onDragOver} onDrop={onDrop}>
+      {cableDrag && (
+        <svg className="fixed inset-0 z-50 pointer-events-none" width="100%" height="100%">
+          <line
+            x1={cableDrag.startScreen.x}
+            y1={cableDrag.startScreen.y}
+            x2={cableDrag.current.x}
+            y2={cableDrag.current.y}
+            stroke="#f59e0b"
+            strokeWidth={2}
+            strokeDasharray="4 4"
+          />
+        </svg>
+      )}
       <ReactFlow
         nodes={nodes}
         edges={styledEdges}
@@ -375,6 +460,7 @@ function Flow() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onConnectEnd={onConnectEnd}
         onNodeDragStop={onNodeDragStop}
         onSelectionChange={onSelectionChange}
         isValidConnection={isValidConnection}
@@ -391,11 +477,14 @@ function Flow() {
           style: { strokeWidth: 3 },
         }}
         fitView
-        minZoom={0.05}
+        // 0.2 ≈ la carte (biomes + gisements, ±BOUNDS dans biomeMap.ts) remplit l'écran au
+        // dézoom max — au-delà, on ne verrait qu'un vide hors de la zone explorée.
+        minZoom={0.2}
         maxZoom={2.5}
         proOptions={{ hideAttribution: true }}
       >
         <ViewportPortal>
+          <BiomeLayer />
           <ResourceLayer />
         </ViewportPortal>
         <Panel position="top-right">

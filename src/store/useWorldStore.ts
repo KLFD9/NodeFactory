@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { generateBiomeMap, type BiomeRegion } from '@/game/biomeMap';
 import { generateResourceMap, type ResourceDeposit } from '@/game/resourceMap';
 import { useGraphStore } from '@/store/useGraphStore';
 
@@ -17,6 +18,7 @@ import { useGraphStore } from '@/store/useGraphStore';
 interface WorldState {
   seed: number;
   deposits: ResourceDeposit[];
+  biomes: BiomeRegion[];
 
   /** Génère la carte au premier lancement (si elle est encore vide). */
   ensureGenerated: (rawItemIds: string[]) => void;
@@ -31,25 +33,26 @@ export const useWorldStore = create<WorldState>()(
     (set, get) => ({
       seed: 0,
       deposits: [],
+      biomes: [],
 
       ensureGenerated: (rawItemIds) => {
         if (get().deposits.length > 0) return;
         const seed = get().seed || randomSeed();
-        set({ seed, deposits: generateResourceMap(rawItemIds, seed) });
+        set({ seed, deposits: generateResourceMap(rawItemIds, seed), biomes: generateBiomeMap(rawItemIds, seed) });
       },
 
       regenerate: (rawItemIds) => {
         const seed = randomSeed();
         useGraphStore.getState().unbindAllMiners();
-        set({ seed, deposits: generateResourceMap(rawItemIds, seed) });
+        set({ seed, deposits: generateResourceMap(rawItemIds, seed), biomes: generateBiomeMap(rawItemIds, seed) });
       },
     }),
     {
-      // v2 : nouvel espacement des gisements/pins → on invalide les cartes v1 trop serrées
+      // v4 : rayon des dégradés de biome agrandi (meilleure couverture continue de la carte)
       // (persist sans `migrate` repart de l'état initial, donc `ensureGenerated` régénère).
       name: 'nf-world',
-      version: 2,
-      partialize: (s) => ({ seed: s.seed, deposits: s.deposits }),
+      version: 4,
+      partialize: (s) => ({ seed: s.seed, deposits: s.deposits, biomes: s.biomes }),
     },
   ),
 );

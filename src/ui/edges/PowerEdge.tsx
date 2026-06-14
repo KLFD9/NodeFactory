@@ -8,6 +8,8 @@ export interface PowerEdgeData extends Record<string, unknown> {
   opacity?: number;
   /** true si ce câble fait partie du réseau actif (survolé ou sélectionné). */
   active?: boolean;
+  /** Démarre le split-au-clic-glisser (insertion d'un poteau sur ce câble). */
+  onCableMouseDown?: (e: React.MouseEvent) => void;
 }
 
 /**
@@ -72,6 +74,15 @@ export function PowerEdge(props: EdgeProps) {
 
   return (
     <g style={{ opacity, transition: 'opacity 0.22s ease-in-out' }}>
+      {/* 0. Path d'interaction invisible et large : capte le clic-glisser pour insérer un poteau. */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={16}
+        style={{ pointerEvents: 'stroke', cursor: 'crosshair' }}
+        onMouseDown={data?.onCableMouseDown}
+      />
       {/* 1. Gaine isolante extérieure noire extrêmement fine (aspect câble aérien délicat) */}
       <path
         d={edgePath}

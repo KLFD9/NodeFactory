@@ -71,6 +71,16 @@ viewBox** que React Flow calcule sur nodes+viewport. Pour une vraie carte du mon
 minimap custom (canvas 2D, bounds = gisements ∪ nodes), clic = recentrage. Le bouton
 « 🧭 Vue d'ensemble » couvre le besoin en attendant.
 
+### 14. Exploration / découverte de nouveaux gisements hors carte de départ — effort L
+Cf. `2026-06-14-biomes-carte-monde.md` §3. La refonte biomes (2026-06-14) couvre
+`[-FIELD, FIELD]²` (±2600, déborde à `BOUNDS`) ; au-delà = vide. Idée : générer/révéler
+une « ceinture » de biomes + gisements supplémentaires au-delà de `BOUNDS` au fil de la
+progression (récompense Hobby/prestige), via le même PRNG (`generateBiomeMap`/
+`generateResourceMap`, anneau `[BOUNDS, BOUNDS₂]`). Complémentaire à la recherche
+**Prospection** (révèle des gisements déjà générés mais masqués, cf.
+`2026-06-12-refonte-monnaies.md` §4) — celle-ci révèle, celle-là génère du nouveau.
+Décision de déclencheur/budget RP à trancher avec `game-balance`.
+
 ---
 
 ## P3 — Polish / juice

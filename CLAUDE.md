@@ -91,7 +91,11 @@ l'état réel du graphe (`src/game/tutorial.ts`) · pose payée en **AP** (capit
 relié », dérivée des données) · 13 milestones (M1-M10 + M11-M13 gatant les alts paliers 2/3) ·
 score d'efficacité 3 dims · récap offline (popup, plafond 4 h) · usine/progression/monde
 **persistés** (reload sûr) · minimap avec gisements + bouton « Vue d'ensemble » · UI HUD
-industriel (toolbar gauche flottante OBJ/COMP, bannière ressources, GSAP).
+industriel (toolbar gauche flottante OBJ/COMP, bannière ressources, GSAP) · carte du monde
+en **biomes** (pavage Voronoï, `src/game/biomeMap.ts`) couvrant `±BOUNDS`, placement des
+gisements biaisé par affinité de biome (`src/game/resourceMap.ts`), `minZoom=0.2` pour que
+la carte remplisse l'écran au dézoom max — détails et piste « exploration » future dans
+`Docs/design/2026-06-14-biomes-carte-monde.md`.
 
 **~220 tests unitaires + 15 E2E verts.** Backlog priorisé :
 `Docs/design/2026-06-12-backlog-gameplay.md` (P1 restants : prestige ; puis pondération AP,

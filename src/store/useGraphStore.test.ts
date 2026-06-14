@@ -234,3 +234,156 @@ describe('useGraphStore — remboursement de Bolts via onNodesChange (suppressio
     expect(useProgressionStore.getState().bolts).toBe(15);
   });
 });
+
+describe('useGraphStore — poteaux électriques (drag-to-pole / split de câble)', () => {
+  beforeEach(() => {
+    useGraphStore.setState({ nodes: [], edges: [], selectedNodeId: null, clipboard: null });
+    useProgressionStore.setState({ bolts: 20 });
+  });
+
+  it('createPoleFromHandle depuis un handle source (power-out-0) câble source→pole.power-in', () => {
+    const a = node('A', 'coal-generator');
+    useGraphStore.setState({ nodes: [a], edges: [] });
+
+    useGraphStore.getState().createPoleFromHandle('A', 'power-out-0', 'source', { x: 100, y: 100 });
+    const st = useGraphStore.getState();
+
+    expect(useProgressionStore.getState().bolts).toBe(15); // 20 - 5
+    const pole = st.nodes.find((n) => n.data.buildingId === 'power-pole');
+    expect(pole).toBeDefined();
+    expect(st.selectedNodeId).toBe(pole!.id);
+    const edge = st.edges.find((e) => e.source === 'A' && e.target === pole!.id);
+    expect(edge?.sourceHandle).toBe('power-out-0');
+    expect(edge?.targetHandle).toBe('power-in');
+  });
+
+  it('createPoleFromHandle depuis un handle target (power-in) câble pole.power-out-0→target', () => {
+    const a = node('A', 'smelter');
+    useGraphStore.setState({ nodes: [a], edges: [] });
+
+    useGraphStore.getState().createPoleFromHandle('A', 'power-in', 'target', { x: 100, y: 100 });
+    const st = useGraphStore.getState();
+
+    const pole = st.nodes.find((n) => n.data.buildingId === 'power-pole');
+    expect(pole).toBeDefined();
+    const edge = st.edges.find((e) => e.target === 'A' && e.source === pole!.id);
+    expect(edge?.sourceHandle).toBe('power-out-0');
+    expect(edge?.targetHandle).toBe('power-in');
+  });
+
+  it('createPoleFromHandle refuse la pose si les Bolts sont insuffisants', () => {
+    useProgressionStore.setState({ bolts: 0 });
+    const a = node('A', 'coal-generator');
+    useGraphStore.setState({ nodes: [a], edges: [] });
+
+    useGraphStore.getState().createPoleFromHandle('A', 'power-out-0', 'source', { x: 100, y: 100 });
+    const st = useGraphStore.getState();
+
+    expect(st.nodes).toHaveLength(1);
+    expect(st.edges).toHaveLength(0);
+    expect(st.placementDenied).not.toBeNull();
+  });
+
+  describe('splitPowerEdgeWithPole', () => {
+    const a = node('A', 'coal-generator');
+    const b = node('B', 'smelter');
+    const cable: Edge = {
+      id: 'cable-1',
+      source: 'A',
+      sourceHandle: 'power-out',
+      target: 'B',
+      targetHandle: 'power-in',
+    };
+
+    beforeEach(() => {
+      useGraphStore.setState({ nodes: [a, b], edges: [cable] });
+    });
+
+    it('drop sur un handle power-in : insère 1 poteau et 3 arêtes, coûte 5 Bolts', () => {
+      useGraphStore.getState().splitPowerEdgeWithPole('cable-1', { x: 50, y: 50 }, {
+        kind: 'handle',
+        nodeId: 'C',
+        handleId: 'power-in',
+      });
+      const st = useGraphStore.getState();
+
+      expect(useProgressionStore.getState().bolts).toBe(15); // 20 - 5
+      expect(st.edges.find((e) => e.id === 'cable-1')).toBeUndefined();
+      const poles = st.nodes.filter((n) => n.data.buildingId === 'power-pole');
+      expect(poles).toHaveLength(1);
+      const pole = poles[0];
+
+      const up = st.edges.find((e) => e.target === pole.id);
+      expect(up?.source).toBe('A');
+      expect(up?.sourceHandle).toBe('power-out');
+      expect(up?.targetHandle).toBe('power-in');
+
+      const down = st.edges.find((e) => e.source === pole.id && e.target === 'B');
+      expect(down?.sourceHandle).toBe('power-out-0');
+      expect(down?.targetHandle).toBe('power-in');
+
+      const branch = st.edges.find((e) => e.source === pole.id && e.target === 'C');
+      expect(branch?.sourceHandle).toBe('power-out-1');
+      expect(branch?.targetHandle).toBe('power-in');
+
+      expect(st.selectedNodeId).toBe(pole.id);
+    });
+
+    it('drop dans le vide : insère 2 poteaux et 3 arêtes, coûte 10 Bolts', () => {
+      useGraphStore.getState().splitPowerEdgeWithPole('cable-1', { x: 50, y: 50 }, {
+        kind: 'canvas',
+        position: { x: 300, y: 300 },
+      });
+      const st = useGraphStore.getState();
+
+      expect(useProgressionStore.getState().bolts).toBe(10); // 20 - 10
+      expect(st.edges.find((e) => e.id === 'cable-1')).toBeUndefined();
+      const poles = st.nodes.filter((n) => n.data.buildingId === 'power-pole');
+      expect(poles).toHaveLength(2);
+      expect(st.edges).toHaveLength(3);
+
+      const [poleP, poleQ] = poles;
+      const link = st.edges.find((e) => e.source === poleP.id && e.target === poleQ.id);
+      expect(link?.sourceHandle).toBe('power-out-1');
+      expect(link?.targetHandle).toBe('power-in');
+    });
+
+    it('drop=null annule l’opération (aucune mutation)', () => {
+      useGraphStore.getState().splitPowerEdgeWithPole('cable-1', { x: 50, y: 50 }, null);
+      const st = useGraphStore.getState();
+
+      expect(st.nodes).toHaveLength(2);
+      expect(st.edges).toEqual([cable]);
+      expect(useProgressionStore.getState().bolts).toBe(20);
+    });
+
+    it('Bolts insuffisants (drop sur handle, coût 5) : refus, câble d’origine intact', () => {
+      useProgressionStore.setState({ bolts: 4 });
+      useGraphStore.getState().splitPowerEdgeWithPole('cable-1', { x: 50, y: 50 }, {
+        kind: 'handle',
+        nodeId: 'C',
+        handleId: 'power-in',
+      });
+      const st = useGraphStore.getState();
+
+      expect(st.nodes).toHaveLength(2);
+      expect(st.edges).toEqual([cable]);
+      expect(st.placementDenied).not.toBeNull();
+      expect(useProgressionStore.getState().bolts).toBe(4);
+    });
+
+    it('Bolts insuffisants (drop dans le vide, coût 10) : refus, câble d’origine intact', () => {
+      useProgressionStore.setState({ bolts: 9 });
+      useGraphStore.getState().splitPowerEdgeWithPole('cable-1', { x: 50, y: 50 }, {
+        kind: 'canvas',
+        position: { x: 300, y: 300 },
+      });
+      const st = useGraphStore.getState();
+
+      expect(st.nodes).toHaveLength(2);
+      expect(st.edges).toEqual([cable]);
+      expect(st.placementDenied).not.toBeNull();
+      expect(useProgressionStore.getState().bolts).toBe(9);
+    });
+  });
+});

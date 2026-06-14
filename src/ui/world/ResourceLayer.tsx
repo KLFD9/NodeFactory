@@ -58,38 +58,6 @@ export function ResourceLayer() {
         const c = color(d.resourceId);
         return (
           <div key={d.id} style={{ position: 'absolute', left: 0, top: 0, zIndex: 0 }}>
-            {/* Blob décoratif */}
-            <svg
-              width={d.radius * 2}
-              height={d.radius * 2}
-              viewBox="-1 -1 2 2"
-              style={{
-                position: 'absolute',
-                left: d.x - d.radius,
-                top: d.y - d.radius,
-                pointerEvents: 'none',
-                overflow: 'visible',
-              }}
-            >
-              <defs>
-                <radialGradient id={`grad-${d.id}`} cx="50%" cy="50%" r="68%">
-                  <stop offset="0%" stopColor={c} stopOpacity={0.14} />
-                  <stop offset="60%" stopColor={c} stopOpacity={0.06} />
-                  <stop offset="100%" stopColor={c} stopOpacity={0} />
-                </radialGradient>
-              </defs>
-              {/* Zone volontairement DISCRÈTE : remplissage diffus + contour pointillé léger
-                  (présence du gisement sans écraser le canvas ni gêner le placement). */}
-              <path
-                d={d.blobPath}
-                fill={`url(#grad-${d.id})`}
-                stroke={c}
-                strokeOpacity={0.18}
-                strokeWidth={0.006}
-                strokeDasharray="0.05 0.035"
-              />
-            </svg>
-
             {/* Filigrane d'ore au CENTRE — seulement si aucun pin n'y est (gisement à 2 pins).
                 Pour un gisement à 1 pin, le médaillon est déjà au centre et porte l'icône. */}
             {d.pins.length !== 1 && itemImage(d.resourceId) && (

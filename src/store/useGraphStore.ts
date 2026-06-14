@@ -137,6 +137,23 @@ interface GraphState {
   placeMinerOnPin: (binding: MinerBinding) => void;
   /** Détache tous les extracteurs (utilisé quand la carte est régénérée). */
   unbindAllMiners: () => void;
+
+  /**
+   * Lâcher un câble énergie (`power-in`/`power-out*`) dans le vide pose un `power-pole`
+   * connecté au handle d'origine. Respecte le coût Bolts (`BUILDING_COSTS['power-pole']`).
+   */
+  createPoleFromHandle: (
+    nodeId: string,
+    handleId: string,
+    handleType: 'source' | 'target',
+    position: XYPosition,
+  ) => void;
+  /**
+   * Insère un `power-pole` au point cliqué sur un câble énergie existant (le divise en deux
+   * segments à travers le poteau), puis câble une nouvelle sortie vers `drop` (un handle
+   * `power-in` ou, dans le vide, un second poteau créé au passage).
+   */
+  splitPowerEdgeWithPole: (edgeId: string, clickPosition: XYPosition, drop: CableDrop) => void;
 }
 
 /** Données de liaison d'un mineur à un pin (passées en primitifs pour découpler du module monde). */
@@ -153,6 +170,15 @@ export interface MinerBinding {
 /** Demi-dimensions approximatives d'une carte mineur, pour centrer la pose sur le pin. */
 const MINER_HALF_W = 110;
 const MINER_HALF_H = 40;
+
+/** Demi-taille du node poteau électrique (h-14 w-14 = 56px), pour le centrer sous le curseur. */
+const POLE_HALF = 28;
+
+/** Cible d'une connexion câble lâchée en dehors d'une arête (mécaniques drag-to-pole / split). */
+export type CableDrop =
+  | { kind: 'handle'; nodeId: string; handleId: string }
+  | { kind: 'canvas'; position: XYPosition }
+  | null;
 
 export const useGraphStore = create<GraphState>()(
   persist(
@@ -499,6 +525,99 @@ export const useGraphStore = create<GraphState>()(
           : n,
       ),
     })),
+
+  createPoleFromHandle: (nodeId, handleId, handleType, position) =>
+    set((state) => {
+      const buildingId = 'power-pole';
+      const cost = BUILDING_COSTS[buildingId] ?? 0;
+      if (cost > 0 && !useProgressionStore.getState().spendBolts(cost)) {
+        return {
+          placementDenied: { buildingId, cost, available: useProgressionStore.getState().bolts },
+        };
+      }
+      const id = nextId();
+      const pole: MachineNode = {
+        id,
+        type: 'machine',
+        position: { x: position.x - POLE_HALF, y: position.y - POLE_HALF },
+        data: initialNodeData(buildingId, 'power'),
+      };
+      const edge: Edge =
+        handleType === 'source'
+          ? { id: `e-${nextId()}`, source: nodeId, sourceHandle: handleId, target: id, targetHandle: 'power-in' }
+          : { id: `e-${nextId()}`, source: id, sourceHandle: 'power-out-0', target: nodeId, targetHandle: handleId };
+      return { nodes: [...state.nodes, pole], edges: [...state.edges, edge], selectedNodeId: id };
+    }),
+
+  splitPowerEdgeWithPole: (edgeId, clickPosition, drop) =>
+    set((state) => {
+      if (!drop) return {};
+      const edgeToSplit = state.edges.find((e) => e.id === edgeId);
+      if (!edgeToSplit) return {};
+
+      const buildingId = 'power-pole';
+      const unitCost = BUILDING_COSTS[buildingId] ?? 0;
+      const totalCost = unitCost * (drop.kind === 'canvas' ? 2 : 1);
+      if (totalCost > 0 && !useProgressionStore.getState().spendBolts(totalCost)) {
+        return {
+          placementDenied: { buildingId, cost: totalCost, available: useProgressionStore.getState().bolts },
+        };
+      }
+
+      const poleP: MachineNode = {
+        id: nextId(),
+        type: 'machine',
+        position: { x: clickPosition.x - POLE_HALF, y: clickPosition.y - POLE_HALF },
+        data: initialNodeData(buildingId, 'power'),
+      };
+      const edgeA: Edge = {
+        id: `e-${nextId()}`,
+        source: edgeToSplit.source,
+        sourceHandle: edgeToSplit.sourceHandle,
+        target: poleP.id,
+        targetHandle: 'power-in',
+      };
+      const edgeB: Edge = {
+        id: `e-${nextId()}`,
+        source: poleP.id,
+        sourceHandle: 'power-out-0',
+        target: edgeToSplit.target,
+        targetHandle: edgeToSplit.targetHandle,
+      };
+
+      const newNodes: MachineNode[] = [poleP];
+      let edgeC: Edge;
+      if (drop.kind === 'handle') {
+        edgeC = {
+          id: `e-${nextId()}`,
+          source: poleP.id,
+          sourceHandle: 'power-out-1',
+          target: drop.nodeId,
+          targetHandle: drop.handleId,
+        };
+      } else {
+        const poleQ: MachineNode = {
+          id: nextId(),
+          type: 'machine',
+          position: { x: drop.position.x - POLE_HALF, y: drop.position.y - POLE_HALF },
+          data: initialNodeData(buildingId, 'power'),
+        };
+        newNodes.push(poleQ);
+        edgeC = {
+          id: `e-${nextId()}`,
+          source: poleP.id,
+          sourceHandle: 'power-out-1',
+          target: poleQ.id,
+          targetHandle: 'power-in',
+        };
+      }
+
+      return {
+        nodes: [...state.nodes, ...newNodes],
+        edges: [...state.edges.filter((e) => e.id !== edgeId), edgeA, edgeB, edgeC],
+        selectedNodeId: poleP.id,
+      };
+    }),
     }),
     {
       // L'usine EST la sauvegarde du joueur : sans elle, un reload détruirait toute la

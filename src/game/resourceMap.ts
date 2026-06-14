@@ -1,9 +1,9 @@
 /**
  * src/game/resourceMap.ts — Génération PURE de la carte des gisements de ressources.
  *
- * Un gisement = une tache organique colorée posée sur le canvas, porteuse d'une ressource
- * brute et d'une pureté. Il expose 1-2 « pins » (points d'extraction) sur lesquels on pose
- * un mineur ; le mineur hérite alors automatiquement de la ressource + pureté du gisement.
+ * Un gisement = une zone d'extraction posée sur le canvas, porteuse d'une ressource brute et
+ * d'une pureté. Il expose 1-3 « pins » (points d'extraction) sur lesquels on pose un mineur ;
+ * le mineur hérite alors automatiquement de la ressource + pureté du gisement.
  *
  * Découplage : fonction déterministe, sans React/store. Prend la liste des items bruts
  * (depuis `GameData`) + une graine, renvoie des gisements en coordonnées « flow » (mêmes
@@ -12,6 +12,7 @@
  */
 
 import type { Purity } from '@/data/types';
+import { FIELD, generateBiomeMap, mulberry32, samplePointInPolygon, type BiomeRegion } from './biomeMap';
 
 /** Un point d'extraction sur un gisement, en coordonnées flow. */
 export interface ResourcePin {
@@ -25,27 +26,13 @@ export interface ResourceDeposit {
   /** Item brut extrait (iron-ore, copper-ore, limestone, coal…). */
   resourceId: string;
   purity: Purity;
-  /** Centre du blob, en coordonnées flow. */
+  /** Centre du gisement, en coordonnées flow. */
   x: number;
   y: number;
-  /** Rayon visuel (px flow). */
+  /** Rayon visuel (px flow) — délimite la zone où tombent les pins. */
   radius: number;
-  /** Path SVG d'une forme organique, dans un viewBox normalisé `-1 -1 2 2` (rayon ≈ 1). */
-  blobPath: string;
-  /** 1 à 2 pins, situés à l'intérieur du blob. */
+  /** 1 à 3 pins, situés à l'intérieur du rayon. */
   pins: ResourcePin[];
-}
-
-/** PRNG déterministe minimal (mulberry32) — même graine ⇒ même suite. */
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 /** Pondération des puretés : Normal majoritaire, « pure » rare (1/8). */
@@ -61,37 +48,29 @@ const PURITY_TABLE: Purity[] = [
 ];
 
 /**
- * Zone de génération (coordonnées flow). Volontairement large + grand écart minimal entre
- * centres pour laisser de la place AUTOUR des gisements (construire les lignes de production
- * entre eux). MIN_CENTER_GAP > 2×rayon max + marge ⇒ les blobs ne se chevauchent jamais.
+ * Écart minimal entre centres (coordonnées flow, cf `FIELD` dans `biomeMap`). Volontairement
+ * grand pour laisser de la place AUTOUR des gisements (construire les lignes de production
+ * entre eux). MIN_CENTER_GAP > 2×rayon max + marge ⇒ les zones d'extraction ne se chevauchent
+ * jamais.
  */
-const FIELD = 2600; // x,y ∈ [-FIELD, FIELD]
 const DEPOSIT_COUNT = 8;
 const MIN_CENTER_GAP = 1100; // distance minimale entre deux centres
 const PLACEMENT_ATTEMPTS = 60;
 /** Écart entre les 2 pins d'un même gisement (≥ largeur d'une card Miner ~240px + marge). */
 const PIN_SEPARATION = 380;
 
-/** Construit un path SVG organique (rayon ≈ 1) à partir du PRNG. */
-function blobPath(rng: () => number): string {
-  const points = 9;
-  const coords: Array<[number, number]> = [];
-  for (let i = 0; i < points; i++) {
-    const angle = (i / points) * Math.PI * 2;
-    const r = 0.78 + rng() * 0.22; // rayon bruité entre 0.78 et 1.0
-    coords.push([Math.cos(angle) * r, Math.sin(angle) * r]);
+/** Probabilité de tirer le centre d'un gisement dans une région de biome affine à sa ressource. */
+const BIOME_AFFINITY_CHANCE = 0.7;
+
+/** Tire un centre candidat : dans une région affine à `resourceId` si possible, sinon uniforme sur `FIELD`. */
+function rollCenter(rng: () => number, resourceId: string, biomes: BiomeRegion[]): [number, number] {
+  const affineRegions = biomes.filter((b) => b.affinity === resourceId);
+  if (affineRegions.length > 0 && rng() < BIOME_AFFINITY_CHANCE) {
+    const region = affineRegions[Math.floor(rng() * affineRegions.length)];
+    const point = samplePointInPolygon(region.polygon, rng);
+    if (point) return point;
   }
-  // Courbe fermée lissée (Catmull-Rom → cubic Bézier approx via points milieux).
-  let d = '';
-  for (let i = 0; i < coords.length; i++) {
-    const [x0, y0] = coords[i];
-    const [x1, y1] = coords[(i + 1) % coords.length];
-    const mx = (x0 + x1) / 2;
-    const my = (y0 + y1) / 2;
-    if (i === 0) d += `M ${mx.toFixed(3)} ${my.toFixed(3)} `;
-    d += `Q ${x1.toFixed(3)} ${y1.toFixed(3)} ${((x1 + coords[(i + 2) % coords.length][0]) / 2).toFixed(3)} ${((y1 + coords[(i + 2) % coords.length][1]) / 2).toFixed(3)} `;
-  }
-  return d + 'Z';
+  return [(rng() * 2 - 1) * FIELD, (rng() * 2 - 1) * FIELD];
 }
 
 /**
@@ -101,6 +80,7 @@ function blobPath(rng: () => number): string {
  */
 export function generateResourceMap(rawItemIds: string[], seed: number): ResourceDeposit[] {
   if (rawItemIds.length === 0) return [];
+  const biomes = generateBiomeMap(rawItemIds, seed);
   const rng = mulberry32(seed);
   const deposits: ResourceDeposit[] = [];
 
@@ -128,8 +108,7 @@ export function generateResourceMap(rawItemIds: string[], seed: number): Resourc
     const rounds = guaranteed ? 3 : 1;
     for (let round = 0; round < rounds && !placed; round++) {
       for (let attempt = 0; attempt < PLACEMENT_ATTEMPTS; attempt++) {
-        cx = (rng() * 2 - 1) * FIELD;
-        cy = (rng() * 2 - 1) * FIELD;
+        [cx, cy] = rollCenter(rng, resourceId, biomes);
         if (deposits.every((d) => Math.hypot(d.x - cx, d.y - cy) >= gap)) {
           placed = true;
           break;
@@ -176,7 +155,6 @@ export function generateResourceMap(rawItemIds: string[], seed: number): Resourc
       x: cx,
       y: cy,
       radius,
-      blobPath: blobPath(rng),
       pins,
     });
   }
