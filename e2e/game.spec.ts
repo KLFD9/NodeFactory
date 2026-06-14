@@ -138,8 +138,8 @@ test.describe('Accueil (premier lancement)', () => {
 
     const welcome = page.getByTestId('welcome-modal');
     await expect(welcome).toBeVisible();
-    await expect(welcome).toContainText('Extrais');
-    await expect(welcome).toContainText('Automatise');
+    await expect(welcome).toContainText('Collecte');
+    await expect(welcome).toContainText('Entraîne');
     await expect(welcome).toContainText('Optimise');
 
     await page.getByTestId('welcome-start').click();
@@ -147,8 +147,8 @@ test.describe('Accueil (premier lancement)', () => {
     // Le tutoriel prend le relais, section Électricité (1/3) — l'électricité se
     // construit AVANT la chaîne de fer (pas de charbon, pas de courant).
     await expect(page.getByTestId('tutorial-panel')).toBeVisible();
-    await expect(page.getByTestId('tutorial-panel')).toContainText('ÉLECTRICITÉ — 1/3');
-    await expect(page.getByTestId('tutorial-panel')).toContainText('Extrais le charbon');
+    await expect(page.getByTestId('tutorial-panel')).toContainText('COMPUTE — 1/3');
+    await expect(page.getByTestId('tutorial-panel')).toContainText('Capte de l’énergie');
   });
 
   test('joueur qui revient (welcomeSeen) : pas d’écran d’accueil', async ({ page }) => {
@@ -165,13 +165,13 @@ test.describe('Tutoriel (dérivé de l’état réel)', () => {
     await gotoReady(page);
 
     const panel = page.getByTestId('tutorial-panel');
-    await expect(panel).toContainText('ÉLECTRICITÉ — 1/3');
-    await expect(panel).toContainText('Extrais le charbon');
+    await expect(panel).toContainText('COMPUTE — 1/3');
+    await expect(panel).toContainText('Capte de l’énergie');
 
     // Étape 1 : le cadrage initial centre le gisement de charbon → le pin est cliquable.
-    await page.locator('button[title*="Coal"]').first().click();
+    await page.locator('button[title*="Grid Power"]').first().click();
     await expect(page.locator('.react-flow__node')).toHaveCount(1);
-    await expect(panel).toContainText('Pose un générateur');
+    await expect(panel).toContainText('Déploie un datacenter');
 
     // Suggestion contextuelle : le mineur de charbon propose le Coal Generator relié.
     await page.getByTestId('suggest-downstream').click();
@@ -179,7 +179,7 @@ test.describe('Tutoriel (dérivé de l’état réel)', () => {
 
     // Générateur posé + nourri (belt charbon) mais boucle électrique non câblée →
     // étape « Boucle le réseau », et la physique suit : rien ne produit encore.
-    await expect(panel).toContainText('Boucle le réseau');
+    await expect(panel).toContainText('Boucle le compute');
     await expect(page.getByText(/hors tension/)).toBeVisible();
     await expect(page.getByText('0 machines actives')).toBeVisible();
   });
@@ -206,8 +206,8 @@ test.describe('Premier contact (Hook)', () => {
     // Les panneaux gauche vivent derrière la toolbar flottante (fermés par défaut).
     await openPalette(page);
     await expect(page.getByRole('heading', { name: 'Composants' })).toBeVisible();
-    await expect(paletteItem(page, 'Miner Mk.1')).toBeVisible();
-    await expect(paletteItem(page, 'Smelter')).toBeVisible();
+    await expect(paletteItem(page, 'Data Harvester Mk.1')).toBeVisible();
+    await expect(paletteItem(page, 'Data Cleaner')).toBeVisible();
     await openMilestones(page);
     await expect(page.getByRole('heading', { name: 'Objectifs' })).toBeVisible();
   });
@@ -217,8 +217,8 @@ test.describe('Premier contact (Hook)', () => {
     await gotoReady(page);
 
     await openPalette(page);
-    await expect(paletteItem(page, 'Coal Generator')).toBeVisible();
-    for (const locked of ['Constructor', 'Miner Mk.2', 'Miner Mk.3', 'Assembler', 'Foundry', 'Manufacturer']) {
+    await expect(paletteItem(page, 'Datacenter')).toBeVisible();
+    for (const locked of ['Training Unit', 'Data Harvester Mk.2', 'Data Harvester Mk.3', 'Fine-Tuning Rig', 'Dataset Curator', 'Pretraining Cluster']) {
       await expect(paletteItem(page, locked)).toHaveCount(0);
     }
   });
@@ -288,7 +288,7 @@ test.describe('Améliorations par machine (Bolts)', () => {
 
     // Pose un mineur via le pin (10 Bolts → solde 40), puis le sélectionne
     // (le NodeToolbar « AMÉLIORER » n'apparaît que sur le node sélectionné).
-    await page.locator('button[title*="Coal"]').first().click();
+    await page.locator('button[title*="Grid Power"]').first().click();
     await expect(page.locator('.react-flow__node')).toHaveCount(1);
     await page.locator('.react-flow__node').click();
 
@@ -306,7 +306,7 @@ test.describe('Contrats (objectif vivant)', () => {
     await openMilestones(page);
 
     const panel = page.getByTestId('contract-panel');
-    await expect(panel).toContainText('FICSIT Bootstrap');
+    await expect(panel).toContainText('Seed Round');
     await expect(panel).toContainText('60');
     await expect(panel.getByTestId('reputation-gauge')).toBeVisible();
   });
@@ -430,7 +430,7 @@ test.describe('Progression (milestones)', () => {
     await gotoReady(page);
 
     await openPalette(page);
-    await expect(paletteItem(page, 'Constructor')).toBeVisible();
-    await expect(paletteItem(page, 'Assembler')).toHaveCount(0);
+    await expect(paletteItem(page, 'Training Unit')).toBeVisible();
+    await expect(paletteItem(page, 'Fine-Tuning Rig')).toHaveCount(0);
   });
 });

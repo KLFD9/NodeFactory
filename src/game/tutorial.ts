@@ -12,6 +12,12 @@
  * Section ÉLECTRICITÉ (boucle auto-alimentée : mineur de charbon → générateur → courant
  * du mineur) puis section FER (mineur → smelter → courant), puis AUTOMATISATION.
  *
+ * RELAIS POST-M1 (audit early-game 2026-06-14) : le tutoriel ne s'efface PLUS brutalement
+ * à M1. Une dernière étape « Étends ton usine » prend le relais (poser le Constructor
+ * fraîchement débloqué → produire les premiers Iron Rod) pour éviter le « cliff » où le
+ * joueur, privé de guide juste après sa première récompense, ne sait plus quoi faire.
+ * Le tutoriel ne se termine (-1) qu'une fois M2 atteint.
+ *
  * Découplage : aucune dépendance React/store. L'UI construit un `TutorialSnapshot`
  * depuis les stores et appelle `currentTutorialStep`.
  */
@@ -36,6 +42,8 @@ export interface TutorialSnapshot {
   chainPowered: boolean;
   /** Le premier milestone (60 Iron Ingot) est franchi. */
   m1Reached: boolean;
+  /** Le deuxième milestone (60 Iron Rod) est franchi — fin du relais, fin du tutoriel. */
+  m2Reached: boolean;
 }
 
 export interface TutorialStep {
@@ -49,66 +57,74 @@ export interface TutorialStep {
 }
 
 /** Les 3 sections, dans l'ordre d'apparition. */
-export const TUTORIAL_SECTIONS = ['Électricité', 'Production de fer', 'Automatisation'] as const;
+export const TUTORIAL_SECTIONS = ['Compute', 'Pipeline de données', 'Automatisation'] as const;
 
-/** Les 9 étapes du tutoriel — la plus courte route vers « ça tourne tout seul ». */
+/** Les 10 étapes du tutoriel — la plus courte route vers « ça tourne tout seul », relais inclus. */
 export const TUTORIAL_STEPS: TutorialStep[] = [
-  // — Électricité : une boucle auto-alimentée, posée AVANT la chaîne de fer.
+  // — Compute : une boucle auto-alimentée (énergie → datacenter → compute), posée AVANT le pipeline.
   {
     id: 'mine-coal',
-    section: 'Électricité',
-    title: 'Extrais le charbon',
-    detail: 'Clique un pin « Coal » sur la carte : un mineur s’y installe (10 Bolts).',
+    section: 'Compute',
+    title: 'Capte de l’énergie',
+    detail: 'Clique un pin « Grid Power » sur la carte : un Data Harvester s’y installe (10 $).',
   },
   {
     id: 'place-generator',
-    section: 'Électricité',
-    title: 'Pose un générateur',
-    detail: 'Glisse un Coal Generator depuis la palette et choisis sa recette charbon → électricité (15 Bolts).',
+    section: 'Compute',
+    title: 'Déploie un datacenter',
+    detail: 'Glisse un Datacenter depuis la palette : il convertit l’énergie en Compute (15 $).',
   },
   {
     id: 'fuel-generator',
-    section: 'Électricité',
-    title: 'Alimente-le en charbon',
-    detail: 'Tire un convoyeur du mineur de charbon vers l’entrée du générateur.',
+    section: 'Compute',
+    title: 'Alimente le datacenter',
+    detail: 'Tire un data bus du harvester d’énergie vers l’entrée du datacenter.',
   },
   {
     id: 'power-loop',
-    section: 'Électricité',
-    title: 'Boucle le réseau',
-    detail: 'Câble le ⚡ (sortie) du générateur vers le ⚡ (entrée) du mineur de charbon : le réseau s’auto-alimente.',
+    section: 'Compute',
+    title: 'Boucle le compute',
+    detail: 'Câble le Compute (sortie) du datacenter vers le harvester d’énergie : le réseau s’auto-alimente.',
   },
-  // — Production de fer : maintenant que le courant existe, on peut câbler dessus.
+  // — Pipeline de données : maintenant que le compute existe, on peut câbler dessus.
   {
     id: 'mine-iron',
-    section: 'Production de fer',
-    title: 'Extrais le fer',
-    detail: 'Clique un pin « Iron Ore » sur la carte : un mineur s’y installe (10 Bolts).',
+    section: 'Pipeline de données',
+    title: 'Collecte des données',
+    detail: 'Clique un pin « Text Corpus » sur la carte : un Data Harvester s’y installe (10 $).',
   },
   {
     id: 'smelt',
-    section: 'Production de fer',
-    title: 'Fonds le minerai',
-    detail: 'Glisse un Smelter depuis la palette, près du mineur (10 Bolts).',
+    section: 'Pipeline de données',
+    title: 'Nettoie les données',
+    detail: 'Glisse un Data Cleaner depuis la palette, près du harvester (10 $).',
   },
   {
     id: 'connect-iron',
-    section: 'Production de fer',
+    section: 'Pipeline de données',
     title: 'Relie-les',
-    detail: 'Tire un lien du rond vert du mineur vers le rond orange du Smelter.',
+    detail: 'Tire un lien du rond vert du harvester vers le rond orange du Data Cleaner.',
   },
   {
     id: 'power-iron',
-    section: 'Production de fer',
-    title: 'Branche le courant',
-    detail: 'Câble le ⚡ du générateur vers le ⚡ du Smelter : sans électricité, rien ne tourne.',
+    section: 'Pipeline de données',
+    title: 'Branche le compute',
+    detail: 'Câble le Compute du datacenter vers le Data Cleaner : sans compute, rien ne tourne.',
   },
   // — Automatisation
   {
     id: 'produce',
     section: 'Automatisation',
     title: 'Laisse tourner',
-    detail: 'Ton usine produit toute seule. Objectif : 60 Iron Ingot → Constructor.',
+    detail: 'Ton pipeline tourne tout seul. Objectif : 60 Clean Tokens → débloque le Training Unit.',
+  },
+  // — Relais post-M1 : on garde le joueur en main juste après sa première récompense.
+  {
+    id: 'automate-next',
+    section: 'Automatisation',
+    title: 'Étends ton pipeline',
+    detail:
+      'M1 atteint, le Training Unit est débloqué (palette, badge NEW). Pose-le, relie-le au Data Cleaner et branche le Compute : 60 Token Sequences ouvrent le palier suivant.',
   },
 ];
 
@@ -117,7 +133,9 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
  * (premier milestone atteint). Dérivé : retirer un élément fait reculer l'étape.
  */
 export function currentTutorialStep(s: TutorialSnapshot): number {
-  if (s.m1Reached) return -1;
+  // Le tutoriel ne se termine qu'au 2e milestone : M1 enchaîne sur le relais d'extension.
+  if (s.m2Reached) return -1;
+  if (s.m1Reached) return 9; // relais « Étends ton usine » (Constructor → Iron Rod)
   if (!s.hasCoalMiner) return 0;
   if (!s.hasCoalGenerator) return 1;
   if (!s.coalGenFed) return 2;

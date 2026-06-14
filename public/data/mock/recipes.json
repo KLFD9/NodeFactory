@@ -1,7 +1,7 @@
 [
   {
     "id": "coal-generator-power",
-    "name": "Coal Generator",
+    "name": "Compute Generation",
     "alternate": false,
     "time": 2,
     "producedIn": "coal-generator",
@@ -10,7 +10,7 @@
   },
   {
     "id": "iron-ingot",
-    "name": "Iron Ingot",
+    "name": "Clean Tokens",
     "alternate": false,
     "time": 2,
     "producedIn": "smelter",
@@ -19,7 +19,7 @@
   },
   {
     "id": "copper-ingot",
-    "name": "Copper Ingot",
+    "name": "Image Tensors",
     "alternate": false,
     "time": 2,
     "producedIn": "smelter",
@@ -28,7 +28,7 @@
   },
   {
     "id": "iron-plate",
-    "name": "Iron Plate",
+    "name": "Embeddings",
     "alternate": false,
     "time": 6,
     "producedIn": "constructor",
@@ -37,7 +37,7 @@
   },
   {
     "id": "iron-rod",
-    "name": "Iron Rod",
+    "name": "Token Sequences",
     "alternate": false,
     "time": 4,
     "producedIn": "constructor",
@@ -46,7 +46,7 @@
   },
   {
     "id": "screw",
-    "name": "Screw",
+    "name": "Feature Vectors",
     "alternate": false,
     "time": 6,
     "producedIn": "constructor",
@@ -55,7 +55,7 @@
   },
   {
     "id": "reinforced-iron-plate",
-    "name": "Reinforced Iron Plate",
+    "name": "LoRA Adapter",
     "alternate": false,
     "time": 12,
     "producedIn": "assembler",
@@ -67,7 +67,7 @@
   },
   {
     "id": "modular-frame",
-    "name": "Modular Frame",
+    "name": "Training Checkpoint",
     "alternate": false,
     "time": 60,
     "producedIn": "assembler",
@@ -79,7 +79,7 @@
   },
   {
     "id": "wire",
-    "name": "Wire",
+    "name": "Weight Tensors",
     "alternate": false,
     "time": 4,
     "producedIn": "constructor",
@@ -88,7 +88,7 @@
   },
   {
     "id": "cable",
-    "name": "Cable",
+    "name": "Neural Layer",
     "alternate": false,
     "time": 2,
     "producedIn": "constructor",
@@ -97,7 +97,7 @@
   },
   {
     "id": "concrete",
-    "name": "Concrete",
+    "name": "Vector Index",
     "alternate": false,
     "time": 4,
     "producedIn": "constructor",
@@ -106,7 +106,7 @@
   },
   {
     "id": "steel",
-    "name": "Steel Ingot",
+    "name": "Curated Dataset",
     "alternate": false,
     "time": 6,
     "producedIn": "foundry",
@@ -118,7 +118,7 @@
   },
   {
     "id": "copper-sheet",
-    "name": "Copper Sheet",
+    "name": "Vision Encoder",
     "alternate": false,
     "time": 6,
     "producedIn": "constructor",
@@ -127,7 +127,7 @@
   },
   {
     "id": "plastic-rod",
-    "name": "Plastic Rod",
+    "name": "Synthetic Data",
     "alternate": false,
     "time": 8,
     "producedIn": "refinery",
@@ -139,7 +139,7 @@
   },
   {
     "id": "circuit-board",
-    "name": "Circuit Board",
+    "name": "Inference Engine",
     "alternate": false,
     "time": 8,
     "producedIn": "assembler",
@@ -151,7 +151,7 @@
   },
   {
     "id": "motor",
-    "name": "Motor",
+    "name": "Reasoning Module",
     "alternate": false,
     "time": 12,
     "producedIn": "assembler",
@@ -163,7 +163,7 @@
   },
   {
     "id": "heavy-frame",
-    "name": "Heavy Frame",
+    "name": "Foundation Model",
     "alternate": false,
     "time": 20,
     "producedIn": "manufacturer",
@@ -176,7 +176,7 @@
   },
   {
     "id": "computer",
-    "name": "Computer",
+    "name": "AI Agent",
     "alternate": false,
     "time": 24,
     "producedIn": "manufacturer",
@@ -189,7 +189,7 @@
   },
   {
     "id": "alt-cast-screw",
-    "name": "Alternate: Cast Screw",
+    "name": "Alt : Batched Feature Vectors",
     "alternate": true,
     "time": 24,
     "producedIn": "constructor",
@@ -198,7 +198,7 @@
   },
   {
     "id": "alt-bolted-iron-plate",
-    "name": "Alternate: Bolted Iron Plate",
+    "name": "Alt : Quantized Adapter",
     "alternate": true,
     "time": 12,
     "producedIn": "assembler",
@@ -210,7 +210,7 @@
   },
   {
     "id": "alt-iron-wire",
-    "name": "Alternate: Iron Wire",
+    "name": "Alt : Distilled Weights",
     "alternate": true,
     "time": 24,
     "producedIn": "constructor",
@@ -219,7 +219,7 @@
   },
   {
     "id": "alt-steel-cast",
-    "name": "Alternate: Steel Cast",
+    "name": "Alt : Rapid Curation",
     "alternate": true,
     "time": 2,
     "producedIn": "foundry",
@@ -231,7 +231,7 @@
   },
   {
     "id": "alt-fused-circuit",
-    "name": "Alternate: Fused Circuit",
+    "name": "Alt : Fused Inference",
     "alternate": true,
     "time": 10,
     "producedIn": "assembler",
@@ -243,7 +243,7 @@
   },
   {
     "id": "alt-automated-motor",
-    "name": "Alternate: Automated Motor",
+    "name": "Alt : Distilled Reasoning",
     "alternate": true,
     "time": 30,
     "producedIn": "manufacturer",

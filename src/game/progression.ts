@@ -11,6 +11,7 @@
 
 import {
   MILESTONES,
+  EARLY_PRODUCTION_MICRO_MILESTONES,
   STARTING_BOLTS,
   STARTING_RP,
   stockCapForRate,
@@ -19,6 +20,7 @@ import {
   checkNewlyReachedMilestones,
   prestigeMultiplier,
   type MilestoneDefinition,
+  type ProductionMicroMilestone,
 } from './balance';
 import {
   advanceContracts,
@@ -46,6 +48,8 @@ export interface ProgressionState {
   nodeCumulativeProduced: Record<string, Record<string, number>>;
   /** Ids des milestones déjà franchis (idempotence). */
   reachedMilestones: string[];
+  /** Ids des micro-jalons (sous M1) déjà franchis — évite de re-notifier après reload. */
+  reachedMicroMilestones: string[];
   /** Bâtiments débloqués par les milestones (filtre futur de la palette). */
   unlockedBuildings: string[];
   /** Recettes alternatives débloquées (futures colonnes activables du LP). */
@@ -87,6 +91,7 @@ export function initialProgression(nowMs: number = Date.now()): ProgressionState
     itemStock: {},
     nodeCumulativeProduced: {},
     reachedMilestones: [],
+    reachedMicroMilestones: [],
     unlockedBuildings: [],
     unlockedRecipes: [],
     lastSeenMs: nowMs,
@@ -157,6 +162,8 @@ export interface TickResult {
   state: ProgressionState;
   /** Milestones franchis pendant CE tick (pour la notification UI). */
   newlyReached: MilestoneDefinition[];
+  /** Micro-jalons (sous M1) franchis pendant CE tick — petits toasts de « juice ». */
+  newlyReachedMicro: ProductionMicroMilestone[];
   /** RP gagnés pendant ce tick. */
   rpGained: number;
   /** Contrat réussi ce tick (notification + Bolts déjà crédités). */
@@ -259,6 +266,20 @@ export function applyProductionTick(state: ProgressionState, input: TickInput): 
   const producedMap = new Map(Object.entries(next.cumulativeProduced));
   const newlyReached = checkNewlyReachedMilestones(MILESTONES, reachedSet, producedMap);
 
+  // 3bis. Micro-jalons (sous M1) : seuils de LECTURE sur la production cumulée — pas de
+  // déblocage, juste un petit toast de feedback rapproché qui densifie le hook. Idempotent
+  // via `reachedMicroMilestones` (persisté) : un micro-jalon déjà vu ne re-notifie jamais.
+  const microSeen = new Set(next.reachedMicroMilestones);
+  const newlyReachedMicro = EARLY_PRODUCTION_MICRO_MILESTONES.filter(
+    (mm) => !microSeen.has(mm.id) && (next.cumulativeProduced[mm.itemId] ?? 0) >= mm.target,
+  );
+  if (newlyReachedMicro.length > 0) {
+    next = {
+      ...next,
+      reachedMicroMilestones: [...next.reachedMicroMilestones, ...newlyReachedMicro.map((mm) => mm.id)],
+    };
+  }
+
   if (newlyReached.length > 0) {
     let withUnlocks = next;
     const reached = [...next.reachedMilestones];
@@ -295,6 +316,7 @@ export function applyProductionTick(state: ProgressionState, input: TickInput): 
   return {
     state: next,
     newlyReached,
+    newlyReachedMicro,
     rpGained,
     contractCompleted: events.completed,
     contractFailed: events.failed,

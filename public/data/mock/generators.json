@@ -1,4 +1,4 @@
 [
-  { "id": "biomass-burner", "name": "Biomass Burner", "powerMW": 30 },
-  { "id": "coal-generator", "name": "Coal Generator", "fuel": "coal", "powerMW": 75 }
+  { "id": "biomass-burner", "name": "Solar Array", "powerMW": 30 },
+  { "id": "coal-generator", "name": "Datacenter", "fuel": "coal", "powerMW": 75 }
 ]

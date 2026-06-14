@@ -29,6 +29,12 @@ import {
   AP_GENERATOR_BASE_COST,
   MACHINE_UPGRADE_COST_RATIO,
   machineUpgradeCost,
+  // Réserve de charbon initiale
+  COAL_GENERATOR_CONSUMPTION_PER_MIN,
+  STARTING_COAL_RESERVE_MINUTES,
+  STARTING_COAL_RESERVE,
+  // Micro-milestones
+  EARLY_PRODUCTION_MICRO_MILESTONES,
   // Milestones
   MILESTONES,
   isMilestoneReached,
@@ -36,6 +42,9 @@ import {
   // Score d'efficacité
   EFFICIENCY_WEIGHTS,
   computeEfficiencyScore,
+  SCORE_PANEL_UNLOCK_MILESTONE_ID,
+  EFFICIENCY_BADGE_THRESHOLDS,
+  efficiencyBadgeForScore,
   // Prestige
   BASE_PRESTIGE_MULT,
   PRESTIGE_MIN_EFFICIENCY,
@@ -298,6 +307,88 @@ describe('machineUpgradeCost (améliorations par machine, Bolts)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 3bis. Réserve de charbon initiale (levier #1)
+// ---------------------------------------------------------------------------
+
+describe('Réserve de charbon initiale (STARTING_COAL_RESERVE)', () => {
+  it('COAL_GENERATOR_CONSUMPTION_PER_MIN = 30 (1 coal / 2s)', () => {
+    // recette coal-generator-power : 1 coal / 2s → 1*60/2 = 30/min
+    expect(COAL_GENERATOR_CONSUMPTION_PER_MIN).toBe(30);
+  });
+
+  it('STARTING_COAL_RESERVE_MINUTES = 2', () => {
+    expect(STARTING_COAL_RESERVE_MINUTES).toBe(2);
+  });
+
+  it('STARTING_COAL_RESERVE = 60 (30 coal/min × 2 min)', () => {
+    expect(STARTING_COAL_RESERVE).toBe(60);
+    expect(STARTING_COAL_RESERVE).toBe(
+      COAL_GENERATOR_CONSUMPTION_PER_MIN * STARTING_COAL_RESERVE_MINUTES,
+    );
+  });
+
+  it('couvre entre 1 et 2 minutes de consommation à débit nominal', () => {
+    const minutesCovered = STARTING_COAL_RESERVE / COAL_GENERATOR_CONSUMPTION_PER_MIN;
+    expect(minutesCovered).toBeGreaterThanOrEqual(1);
+    expect(minutesCovered).toBeLessThanOrEqual(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3ter. Micro-milestones sous M1 (levier #2)
+// ---------------------------------------------------------------------------
+
+describe('EARLY_PRODUCTION_MICRO_MILESTONES', () => {
+  it('3 micro-milestones, tous sur iron-ingot (même donnée que M1)', () => {
+    expect(EARLY_PRODUCTION_MICRO_MILESTONES).toHaveLength(3);
+    for (const m of EARLY_PRODUCTION_MICRO_MILESTONES) {
+      expect(m.itemId).toBe('iron-ingot');
+    }
+  });
+
+  it('ids uniques', () => {
+    const ids = EARLY_PRODUCTION_MICRO_MILESTONES.map((m) => m.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('seuils croissants et tous < target M1 (60)', () => {
+    const targets = EARLY_PRODUCTION_MICRO_MILESTONES.map((m) => m.target);
+    expect(targets).toEqual([1, 10, 30]);
+    for (const t of targets) {
+      expect(t).toBeLessThan(MILESTONES[0].target);
+    }
+  });
+
+  it('premier seuil (1 lingot) atteint en 2s à débit nominal (30/min)', () => {
+    const m = EARLY_PRODUCTION_MICRO_MILESTONES[0];
+    const seconds = (m.target / 30) * 60;
+    expect(seconds).toBeCloseTo(2, 5);
+    expect(m.estimatedSecondsNominal).toBe(2);
+  });
+
+  it('deuxième seuil (10 lingots) atteint en 20s à débit nominal', () => {
+    const m = EARLY_PRODUCTION_MICRO_MILESTONES[1];
+    const seconds = (m.target / 30) * 60;
+    expect(seconds).toBeCloseTo(20, 5);
+    expect(m.estimatedSecondsNominal).toBe(20);
+  });
+
+  it('troisième seuil (30 lingots) atteint en 60s à débit nominal', () => {
+    const m = EARLY_PRODUCTION_MICRO_MILESTONES[2];
+    const seconds = (m.target / 30) * 60;
+    expect(seconds).toBeCloseTo(60, 5);
+    expect(m.estimatedSecondsNominal).toBe(60);
+  });
+
+  it('cadence early-game : feedback toutes les ~10-30s dans les 2 premières minutes', () => {
+    const seconds = EARLY_PRODUCTION_MICRO_MILESTONES.map((m) => m.estimatedSecondsNominal);
+    // Écart 1er → 2e : 18s (dans la fenêtre 10-30s)
+    expect(seconds[1] - seconds[0]).toBeGreaterThanOrEqual(10);
+    expect(seconds[1] - seconds[0]).toBeLessThanOrEqual(30);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 4. Milestones de production
 // ---------------------------------------------------------------------------
 
@@ -328,20 +419,21 @@ describe('Table MILESTONES', () => {
     expect(expectedMin).toBeCloseTo(2.0, 5);
   });
 
-  it('M2 : iron-rod, target=150, 10 min nominales, débloque miner-mk2 (Gate capacité ×2)', () => {
+  it('M2 : iron-rod, target=60, 4 min nominales, débloque miner-mk2 (Gate capacité ×2)', () => {
     const m = MILESTONES[1];
+    expect(m.id).toBe('ms-iron-rod-60');
     expect(m.itemId).toBe('iron-rod');
-    expect(m.target).toBe(150);
-    expect(m.estimatedMinutesNominal).toBeCloseTo(10.0, 1);
-    // 150 / 15 (Constructor : 1*60/4 = 15/min) = 10.0 min ✓
+    expect(m.target).toBe(60);
+    expect(m.estimatedMinutesNominal).toBeCloseTo(4.0, 1);
+    // 60 / 15 (Constructor : 1*60/4 = 15/min) = 4.0 min ✓ (rééquilibré 2026-06-14, était 150/10min)
     expect(m.unlocks.type).toBe('building');
     expect(m.unlocks.id).toBe('miner-mk2');
   });
 
-  it('M2 : vérification calcul de temps → 150 items / 15 per min = 10.0 min', () => {
+  it('M2 : vérification calcul de temps → 60 items / 15 per min = 4.0 min', () => {
     const ironRodRatePerMin = 15; // Constructor : 1*60/4 = 15/min
     const expectedMin = MILESTONES[1].target / ironRodRatePerMin;
-    expect(expectedMin).toBeCloseTo(10.0, 5);
+    expect(expectedMin).toBeCloseTo(4.0, 5);
   });
 
   it('M3 : iron-plate, target=300, 15 min nominales, débloque assembler', () => {
@@ -544,12 +636,12 @@ describe('checkNewlyReachedMilestones', () => {
   it('retourne les milestones nouvellement franchis', () => {
     const produced = new Map([
       ['iron-ingot', 60],   // M1 target=60
-      ['iron-rod', 150],    // M2 target=150
+      ['iron-rod', 60],     // M2 target=60
     ]);
     const alreadyReached = new Set<string>();
     const newly = checkNewlyReachedMilestones(MILESTONES, alreadyReached, produced);
     expect(newly.map((m) => m.id)).toContain('ms-iron-ingot-60');
-    expect(newly.map((m) => m.id)).toContain('ms-iron-rod-150');
+    expect(newly.map((m) => m.id)).toContain('ms-iron-rod-60');
     expect(newly).toHaveLength(2);
   });
 
@@ -659,6 +751,62 @@ describe('computeEfficiencyScore', () => {
     // Cas pathologique (ne devrait pas arriver avec un vrai LP, mais le code doit être robuste)
     const score = computeEfficiencyScore(30, 0, 1, 0, 4, 0);
     expect(score.resources.score).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5bis. Score en 2 temps — gating du panneau + badge par machine (levier #5)
+// ---------------------------------------------------------------------------
+
+describe('SCORE_PANEL_UNLOCK_MILESTONE_ID', () => {
+  it('= ms-iron-rod-60 (M2), pas M1', () => {
+    expect(SCORE_PANEL_UNLOCK_MILESTONE_ID).toBe('ms-iron-rod-60');
+    expect(SCORE_PANEL_UNLOCK_MILESTONE_ID).not.toBe(MILESTONES[0].id);
+  });
+
+  it('correspond bien à un milestone existant de la table', () => {
+    const ids = MILESTONES.map((m) => m.id);
+    expect(ids).toContain(SCORE_PANEL_UNLOCK_MILESTONE_ID);
+  });
+
+  it('le milestone cible est M2 (index 1)', () => {
+    expect(MILESTONES[1].id).toBe(SCORE_PANEL_UNLOCK_MILESTONE_ID);
+  });
+});
+
+describe('efficiencyBadgeForScore', () => {
+  it('EFFICIENCY_BADGE_THRESHOLDS = { optimal: 0.9, correct: 0.6 }', () => {
+    expect(EFFICIENCY_BADGE_THRESHOLDS.optimal).toBe(0.9);
+    expect(EFFICIENCY_BADGE_THRESHOLDS.correct).toBe(0.6);
+  });
+
+  it('score = 1.0 → "optimal"', () => {
+    expect(efficiencyBadgeForScore(1.0)).toBe('optimal');
+  });
+
+  it('score = 0.9 (seuil exact) → "optimal"', () => {
+    expect(efficiencyBadgeForScore(0.9)).toBe('optimal');
+  });
+
+  it('score = 0.89 → "correct"', () => {
+    expect(efficiencyBadgeForScore(0.89)).toBe('correct');
+  });
+
+  it('score = 0.6 (seuil exact) → "correct"', () => {
+    expect(efficiencyBadgeForScore(0.6)).toBe('correct');
+  });
+
+  it('score = 0.59 → "needs-improvement"', () => {
+    expect(efficiencyBadgeForScore(0.59)).toBe('needs-improvement');
+  });
+
+  it('score = 0 → "needs-improvement"', () => {
+    expect(efficiencyBadgeForScore(0)).toBe('needs-improvement');
+  });
+
+  it('seuil "correct" est cohérent avec PRESTIGE_MIN_EFFICIENCY (0.75 entre les deux)', () => {
+    expect(PRESTIGE_MIN_EFFICIENCY).toBeGreaterThan(EFFICIENCY_BADGE_THRESHOLDS.correct);
+    expect(PRESTIGE_MIN_EFFICIENCY).toBeLessThan(EFFICIENCY_BADGE_THRESHOLDS.optimal);
   });
 });
 

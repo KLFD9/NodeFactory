@@ -19,6 +19,43 @@ const CATEGORY_COLOR: Record<string, string> = {
   ingot: '#f97316',
 };
 
+/**
+ * Total de production cumulée (tous items confondus), façon idle-game : « le nombre qui
+ * monte EST le jeu » (Cookie Clicker / Universal Paperclips), appliqué honnêtement — c'est
+ * la somme réelle des débits simulés. Count-up GSAP continu, en tête de bannière mais
+ * visuellement secondaire aux badges d'état des machines.
+ */
+function CumulativeTotal({ total }: { total: number }) {
+  const [display, setDisplay] = useState(total);
+  const valueRef = useRef({ v: total });
+
+  useEffect(() => {
+    const obj = valueRef.current;
+    const tween = gsap.to(obj, {
+      v: total,
+      duration: 0.9,
+      ease: 'none',
+      onUpdate: () => setDisplay(obj.v),
+    });
+    return () => {
+      tween.kill();
+    };
+  }, [total]);
+
+  return (
+    <div
+      className="flex h-10 shrink-0 select-none items-center gap-2 rounded-lg border border-zinc-800/60 bg-zinc-900/30 px-2.5"
+      title="Total d'unités produites depuis le début de la partie (toutes ressources)."
+      data-testid="cumulative-total"
+    >
+      <span className="font-mono text-[9px] font-bold uppercase tracking-widest text-zinc-500">Σ&nbsp;PROD</span>
+      <span className="font-mono text-sm font-bold tabular-nums tracking-wide text-amber-300/90">
+        {fmtAcc(display)}
+      </span>
+    </div>
+  );
+}
+
 interface ResourceBadgeProps {
   itemId: string;
   itemName: string;
@@ -143,6 +180,9 @@ export function ResourceBanner() {
   );
   if (relevant.length === 0) return null;
 
+  // Total tous items confondus (rods, plates… inclus) — le compteur « qui monte ».
+  const grandTotal = Object.values(cumulativeProduced).reduce((s, v) => s + v, 0);
+
   const summary = nodes.length > 0 ? computeFactory(nodes, edges, gameData) : null;
   const productionById = new Map(summary?.production.map((f) => [f.itemId, f.ratePerMin]) ?? []);
   const consumptionById = new Map(summary?.consumption.map((f) => [f.itemId, f.ratePerMin]) ?? []);
@@ -155,6 +195,7 @@ export function ResourceBanner() {
 
       {/* Grille de badges en wrap sans scroll horizontal */}
       <div className="flex flex-wrap items-center gap-1.5 px-2">
+        <CumulativeTotal total={grandTotal} />
         {relevant.map((item) => {
           const prodRate = productionById.get(item.id) ?? 0;
           const consRate = consumptionById.get(item.id) ?? 0;

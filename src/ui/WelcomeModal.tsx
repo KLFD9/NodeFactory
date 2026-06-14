@@ -37,32 +37,32 @@ export function WelcomeModal() {
   const directives = [
     {
       id: '01',
-      title: 'Extrais',
-      detail: 'Pose des mineurs sur les gisements de la carte pour collecter les ressources brutes.',
+      title: 'Collecte',
+      detail: 'Pose des Data Harvesters sur les sources de données et d’énergie de la carte.',
       icon: <ExtractionIcon className="h-5 w-5 text-orange-400 group-hover:scale-110 transition-transform duration-200" />,
       themeColor: '#f97316',
       glowColor: 'rgba(249, 115, 22, 0.25)',
-      params: 'RESOURCE: RAW_ORE // RATE: 60/MIN // SYSTEM: ACTIVE',
+      params: 'SOURCE: WEB_CORPUS // RATE: 60/MIN // SYSTEM: ACTIVE',
       badgeColor: 'border-orange-500/30 bg-orange-500/10 text-orange-400',
     },
     {
       id: '02',
-      title: 'Automatise',
-      detail: 'Relie machines et convoyeurs : la production coule en continu, même hors-ligne.',
+      title: 'Entraîne',
+      detail: 'Relie data cleaners, datacenters et trainers : ton pipeline tourne en continu, même hors-ligne.',
       icon: <ManufacturingIcon className="h-5 w-5 text-cyan-400 group-hover:scale-110 transition-transform duration-200" />,
       themeColor: '#22d3ee',
       glowColor: 'rgba(34, 211, 238, 0.25)',
-      params: 'LOGISTICS: BELTS // FLOW: AUTO // OFFLINE_PROD: COMPLIANT',
+      params: 'PIPELINE: DATA_BUS // FLOW: AUTO // OFFLINE_RUN: COMPLIANT',
       badgeColor: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400',
     },
     {
       id: '03',
       title: 'Optimise',
-      detail: 'Franchis des paliers, débloque des recettes alternatives, et vise le score parfait.',
+      detail: 'Franchis des paliers, débloque des techniques, et minimise ton coût de compute.',
       icon: <OptimizeIcon className="h-5 w-5 text-emerald-400 group-hover:scale-110 transition-transform duration-200" />,
       themeColor: '#34d399',
       glowColor: 'rgba(52, 211, 153, 0.25)',
-      params: 'METRIC: SOLVER_LP // RATING: EFFICIENT // LEVEL: OPTIMAL',
+      params: 'METRIC: SOLVER_LP // COST: EFFICIENT // LEVEL: OPTIMAL',
       badgeColor: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
     },
   ];
@@ -101,7 +101,7 @@ export function WelcomeModal() {
             </span>
           </h1>
           <p className="mt-2 text-sm text-zinc-400 font-sans">
-            Construis une usine qui tourne toute seule — puis rends-la parfaite.
+            Monte un labo IA qui s’entraîne tout seul — puis rends-le redoutablement efficient.
           </p>
         </div>
 

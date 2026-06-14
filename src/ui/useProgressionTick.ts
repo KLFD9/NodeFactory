@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useFactoryStore } from '@/store/useFactoryStore';
 import { useGraphStore } from '@/store/useGraphStore';
 import { useProgressionStore } from '@/store/useProgressionStore';
-import { computeFactory } from '@/graph/computeFactory';
+import { computeFactory, nextGeneratorReserves } from '@/graph/computeFactory';
 import { computeNodeInfo } from '@/graph/nodeInfo';
 
 /** Intervalle du tick de progression (ms). 1 s = accrual fluide sans surcoût. */
@@ -59,6 +59,14 @@ export function useProgressionTick(): void {
       }
 
       const summary = computeFactory(nodes, edges, gameData);
+
+      // Drain de la réserve de charbon des générateurs sous-alimentés (réserve de démarrage).
+      // N'écrit dans le graphe que si une réserve baisse réellement (cf. nextGeneratorReserves).
+      const reserveUpdates = nextGeneratorReserves(nodes, edges, gameData, summary, dtMin);
+      if (reserveUpdates.size > 0) {
+        useGraphStore.getState().applyCoalReserves(reserveUpdates);
+      }
+
       const outThroughput = summary.surplus.reduce((s, f) => s + f.ratePerMin, 0);
       const deficitThroughput = summary.deficits.reduce((s, f) => s + f.ratePerMin, 0);
       const denom = outThroughput + deficitThroughput;

@@ -11,13 +11,14 @@ const snap = (partial: Partial<TutorialSnapshot> = {}): TutorialSnapshot => ({
   smelterFed: false,
   chainPowered: false,
   m1Reached: false,
+  m2Reached: false,
   ...partial,
 });
 
 describe('tutorial', () => {
-  it('9 étapes définies, ids uniques, réparties sur 3 sections (dans l’ordre)', () => {
-    expect(TUTORIAL_STEPS).toHaveLength(9);
-    expect(new Set(TUTORIAL_STEPS.map((s) => s.id)).size).toBe(9);
+  it('10 étapes définies, ids uniques, réparties sur 3 sections (dans l’ordre)', () => {
+    expect(TUTORIAL_STEPS).toHaveLength(10);
+    expect(new Set(TUTORIAL_STEPS.map((s) => s.id)).size).toBe(10);
     expect(TUTORIAL_SECTIONS).toHaveLength(3);
     expect(new Set(TUTORIAL_STEPS.map((s) => s.section))).toEqual(new Set(TUTORIAL_SECTIONS));
     // Chaque section forme un bloc contigu, dans l'ordre de TUTORIAL_SECTIONS.
@@ -94,8 +95,8 @@ describe('tutorial', () => {
     ).toBe(8);
   });
 
-  it('M1 atteint → terminé (-1), quel que soit le reste', () => {
-    expect(currentTutorialStep(snap({ m1Reached: true }))).toBe(-1);
+  it('M1 atteint (M2 non) → relais d’extension (étape 9), quel que soit le reste', () => {
+    expect(currentTutorialStep(snap({ m1Reached: true }))).toBe(9);
     expect(
       currentTutorialStep(
         snap({
@@ -107,7 +108,12 @@ describe('tutorial', () => {
           m1Reached: true,
         }),
       ),
-    ).toBe(-1);
+    ).toBe(9);
+  });
+
+  it('M2 atteint → terminé (-1), même si M1 est aussi marqué', () => {
+    expect(currentTutorialStep(snap({ m1Reached: true, m2Reached: true }))).toBe(-1);
+    expect(currentTutorialStep(snap({ m2Reached: true }))).toBe(-1);
   });
 
   it('dérivé, pas scripté : supprimer le smelter fait reculer à l’étape 5', () => {

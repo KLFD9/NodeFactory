@@ -11,7 +11,7 @@ describe('computeNodeInfo', () => {
       game,
     );
     expect(normal.outputs).toEqual([
-      { itemId: 'iron-ore', itemName: 'Iron Ore', ratePerMin: 60 },
+      { itemId: 'iron-ore', itemName: 'Text Corpus', ratePerMin: 60 },
     ]);
 
     const pure = computeNodeInfo(
@@ -31,10 +31,10 @@ describe('computeNodeInfo', () => {
     const info = computeNodeInfo({ buildingId: 'constructor', recipeId: 'iron-plate' }, game);
     // 3 lingots → 2 plaques en 6 s : 30 lingots/min in, 20 plaques/min out.
     expect(info.inputs).toEqual([
-      { itemId: 'iron-ingot', itemName: 'Iron Ingot', ratePerMin: 30 },
+      { itemId: 'iron-ingot', itemName: 'Clean Tokens', ratePerMin: 30 },
     ]);
     expect(info.outputs).toEqual([
-      { itemId: 'iron-plate', itemName: 'Iron Plate', ratePerMin: 20 },
+      { itemId: 'iron-plate', itemName: 'Embeddings', ratePerMin: 20 },
     ]);
     expect(info.powerMW).toBe(4);
   });

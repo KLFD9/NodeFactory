@@ -12,6 +12,7 @@ import { GraphCanvas } from './GraphCanvas';
 import { Inspector } from './Inspector';
 import { FactorySummaryPanel } from './FactorySummaryPanel';
 import { UnlockToast } from './UnlockToast';
+import { MicroMilestoneToast } from './MicroMilestoneToast';
 import { PlacementDeniedToast } from './PlacementDeniedToast';
 import { OfflineRecapModal } from './OfflineRecapModal';
 import { WelcomeModal } from './WelcomeModal';
@@ -356,7 +357,7 @@ export function App() {
         <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
           <h1 className="text-sm font-semibold tracking-tight">
             Node<span className="text-amber-400">Factory</span>{' '}
-            <span className="text-zinc-500">— Construis · Automatise · Optimise</span>
+            <span className="text-zinc-500">— Collecte · Entraîne · Optimise</span>
           </h1>
           <span className="text-xs text-zinc-500">
             {dataStatus === 'loading' && 'Chargement des données…'}
@@ -521,6 +522,7 @@ export function App() {
 
         <StatusBar />
         <UnlockToast />
+        <MicroMilestoneToast />
         <ContractToast />
         <PlacementDeniedToast />
         <OfflineRecapModal />

@@ -272,6 +272,54 @@ export const STARTING_BOLTS = 50;
 /** Points de Recherche au démarrage : zéro — le premier flux vient de la production. */
 export const STARTING_RP = 0;
 
+// ---------------------------------------------------------------------------
+// 3quater. RÉSERVE DE CHARBON INITIALE — levier #1 « le premier flux est visible »
+//
+//    PROBLÈME : le Coal Generator ne produit du courant QUE s'il reçoit du charbon
+//    via une belt `in-coal` (cf. CLAUDE.md, "pas de charbon, pas de courant"). Sans
+//    réserve initiale, la chaîne fer (Miner → Smelter) reste à l'arrêt tant que le
+//    joueur n'a pas câblé : Miner-coal → Coal Generator → câbles d'alimentation
+//    → Miner-fer/Smelter. Cela ajoute ~4 étapes avant le premier flux visible.
+//
+//    SOLUTION : le Coal Generator démarre avec une petite réserve de charbon déjà
+//    "dans la trémie" (consommée par la physique réelle — cf. src/graph — au même
+//    rythme que le charbon livré par belt). Le temps que cette réserve s'épuise,
+//    le réseau électrique est `powered`, donc Miner-fer + Smelter tournent et
+//    produisent un flux d'Iron Ingot VISIBLE pendant que le joueur câble la boucle
+//    charbon en parallèle.
+//
+//    CALCUL : recette `coal-generator-power` = 1 coal / 2s → 1*60/2 = 30 coal/min
+//    par générateur (1 instance, niveau 0, machineSpeedMult = 1).
+//    Cible : couvrir 1 à 2 minutes de consommation à débit nominal.
+//      - 1 min  → 30 coal
+//      - 2 min  → 60 coal
+//    On retient le HAUT de la fourchette (2 min) : assez long pour que le joueur
+//    ait le temps de poser ET câbler Miner-coal + Coal Generator sans paniquer
+//    (le tutoriel guide ~4 étapes électriques), mais pas assez pour qu'il oublie
+//    la dépendance au charbon — la réserve s'épuise visiblement si la boucle
+//    charbon n'est pas câblée à temps (coupure de courant = signal pédagogique,
+//    pas une punition : le joueur a déjà vu 2 min de production).
+//
+//    [À VALIDER avec l'humain : 60 = 2 min. Si le tutoriel guide plus vite que
+//     prévu, 30 (1 min) suffirait et laisserait moins de "filet de sécurité".]
+// ---------------------------------------------------------------------------
+
+/** Débit de consommation du Coal Generator à débit nominal (1 machine, niveau 0), en coal/min. */
+export const COAL_GENERATOR_CONSUMPTION_PER_MIN = 30; // 1 coal / 2s (recette coal-generator-power)
+
+/** Durée visée de couverture de la réserve initiale, en minutes (haut de la fourchette 1-2 min). */
+export const STARTING_COAL_RESERVE_MINUTES = 2;
+
+/**
+ * Réserve de charbon initiale du Coal Generator (unités), déjà "dans la trémie" au
+ * démarrage. Consommée par la physique réelle (src/graph) au même rythme que le
+ * charbon livré par belt — fournie ici comme donnée de départ, pas comme un bonus
+ * de production fictif (le débit de consommation reste 30 coal/min, inchangé).
+ *
+ * 30 coal/min × 2 min = 60 coal.
+ */
+export const STARTING_COAL_RESERVE = COAL_GENERATOR_CONSUMPTION_PER_MIN * STARTING_COAL_RESERVE_MINUTES; // 60
+
 export const BUILDING_COSTS: Record<string, number> = {
   'miner-mk1': 10,
   'miner-mk2': 120,
@@ -328,13 +376,91 @@ export function machineUpgradeCost(buildingId: string, level: number): number {
 //      Cable         30/min   Concrete     15/min   Modular Frame 2/min
 //
 //    PROGRESSION HOOK → HABIT → HOBBY :
+//      MICRO-MILESTONES (avant M1) : feedback à 2s/20s/60s dans les 2 premières
+//                       minutes — cf. EARLY_PRODUCTION_MICRO_MILESTONES ci-dessous.
 //      M1  (2 min)   : victoire immédiate en session de découverte (Hook).
-//      M2  (10 min)  : gate Miner Mk.2 — premier saut de capacité satisfaisant.
+//      M2  (4 min)   : gate Miner Mk.2 — 2e grande récompense rapprochée (était 10 min,
+//                       rééquilibré 2026-06-14 — cf. justification sous la table).
 //      M3-M5         : 10-15 min chacun — une session de jeu détendue (Habit early).
 //      M6  (17 min)  : gate Miner Mk.3 — deuxième saut de capacité, récompense la persévérance.
 //      M7-M9         : 10-25 min chacun — rythme quotidien (Habit late).
 //      M10 (75 min)  : horizon long terme ; prestige débloqué pour le joueur expert (Hobby).
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// 3quinquies. MICRO-MILESTONES SOUS M1 — levier #2 « densifier le hook »
+//
+//    PROBLÈME : entre le premier démarrage et M1 (60 Iron Ingot @ 30/min = 2 min),
+//    il n'existe AUCUNE récompense intermédiaire → ~125s de "vide" perçu (le joueur
+//    regarde la barre de progression de M1 monter sans signal positif).
+//
+//    SOLUTION : seuils de LECTURE sur `cumulativeProduced['iron-ingot']` (la même
+//    donnée que M1, pas une nouvelle monnaie). L'UI peut afficher un toast/badge
+//    "Premier lingot !" / "10 lingots produits" dès que le seuil est franchi —
+//    AVANT que M1 (60) ne soit atteint.
+//
+//    CADENCE (débit nominal 30/min = 1 ingot / 2s, 1 Smelter) :
+//      - 1er lingot   : 1  / 30 =  2s   → confirmation immédiate "ça marche"
+//      - 10 lingots   : 10 / 30 = 20s   → 1ère traction régulière
+//      - 30 lingots   : 30 / 30 = 60s   → mi-parcours vers M1, "à mi-chemin"
+//      - M1 (60)      : 60 / 30 = 120s  → grande récompense (déblocage Constructor)
+//
+//    Espacements : 2s → 20s (18s) → 60s (40s) → 120s (60s). Les 2 premiers seuils
+//    tombent dans la fenêtre "feedback toutes les 10-30s" du skill game-design ; les
+//    seuils suivants s'espacent naturellement car l'anticipation de M1 (déblocage
+//    de bâtiment, récompense plus "lourde") tolère un intervalle plus long.
+//
+//    Avec 2 machines en parallèle (joueur qui pose un 2e Smelter tôt), tous ces
+//    seuils sont atteints en ~moitié du temps — cohérent avec le reste de la table.
+// ---------------------------------------------------------------------------
+
+export interface ProductionMicroMilestone {
+  /** Identifiant unique (UI : clé de toast/badge). */
+  id: string;
+  /** Item suivi — même clé que `cumulativeProduced` et que M1 (iron-ingot). */
+  itemId: string;
+  /** Quantité cumulée à atteindre. */
+  target: number;
+  /** Libellé court affichable (FR). */
+  label: string;
+  /** Justification : temps à débit nominal (1 machine), en secondes. */
+  estimatedSecondsNominal: number;
+}
+
+/**
+ * Micro-milestones sous M1 (ms-iron-ingot-60) — seuils de LECTURE sur la production
+ * cumulée d'Iron Ingot, déjà accumulée pour M1. Pas de monnaie/état supplémentaire :
+ * l'UI compare `cumulativeProduced['iron-ingot']` à ces `target` pour déclencher un
+ * toast, en plus (et avant) du milestone M1 lui-même.
+ *
+ * Débit de référence : Iron Ingot 30/min (1 Smelter, 1*60/2) → 1 ingot / 2s.
+ */
+export const EARLY_PRODUCTION_MICRO_MILESTONES: ProductionMicroMilestone[] = [
+  {
+    id: 'micro-first-ingot',
+    itemId: 'iron-ingot',
+    target: 1,
+    label: 'Premiers tokens produits !',
+    // 1 / 30 × 60 = 2s.
+    estimatedSecondsNominal: 2,
+  },
+  {
+    id: 'micro-ten-ingots',
+    itemId: 'iron-ingot',
+    target: 10,
+    label: '10 tokens nettoyés',
+    // 10 / 30 × 60 = 20s.
+    estimatedSecondsNominal: 20,
+  },
+  {
+    id: 'micro-thirty-ingots',
+    itemId: 'iron-ingot',
+    target: 30,
+    label: 'Mi-parcours vers le premier déblocage (30 tokens)',
+    // 30 / 30 × 60 = 60s.
+    estimatedSecondsNominal: 60,
+  },
+];
 
 export interface MilestoneDefinition {
   /** Identifiant unique du milestone. */
@@ -363,7 +489,8 @@ export interface MilestoneDefinition {
  *
  * Chaque valeur est vérifiée à la main :
  *   M1  : 60  / 30/min = 2.0 min  → unlock constructor (Hook)
- *   M2  : 150 / 15/min = 10.0 min → unlock miner-mk2  (Gate capacité ×2)
+ *   M2  : 60  / 15/min = 4.0 min  → unlock miner-mk2  (Gate capacité ×2)
+ *      [rééquilibré 2026-06-14, était 150/10.0min — cf. justification ci-dessous]
  *   M3  : 300 / 20/min = 15.0 min → unlock assembler
  *   M4  : 400 / 40/min = 10.0 min → unlock alt-cast-screw
  *   M5  : 75  /  5/min = 15.0 min → unlock foundry
@@ -386,12 +513,15 @@ export const MILESTONES: MilestoneDefinition[] = [
     estimatedMinutesNominal: 2.0,
   },
   {
-    id: 'ms-iron-rod-150',
+    id: 'ms-iron-rod-60',
     itemId: 'iron-rod',
-    target: 150,
+    target: 60,
     unlocks: { type: 'building', id: 'miner-mk2' },
-    // 150 / 15 = 10.0 min (1 Constructor). Gate de capacité : Miner Mk.2 double l'extraction.
-    estimatedMinutesNominal: 10.0,
+    // 60 / 15 = 4.0 min (1 Constructor). Gate de capacité : Miner Mk.2 double l'extraction.
+    // Rééquilibré 2026-06-14 (était 150 / 10.0 min) : la 2e grande récompense doit
+    // tomber à ~3-4 min après M1 (2 min), pas à 10 min — cf. doc de design
+    // 2026-06-14-early-game-hook.md pour la justification complète.
+    estimatedMinutesNominal: 4.0,
   },
   {
     id: 'ms-iron-plate-300',
@@ -612,6 +742,91 @@ export function computeEfficiencyScore(
     energy.score * EFFICIENCY_WEIGHTS.energy;
 
   return { resources, machines, energy, global };
+}
+
+// ---------------------------------------------------------------------------
+// 6bis. SCORE EN 2 TEMPS — levier #5 (partie chiffrée)
+//
+//    PROBLÈME : afficher le panneau de score complet (3 dimensions LP) dès le
+//    début est prématuré — avec 1 seule machine (Smelter), il n'y a AUCUN choix
+//    structurel possible : l'usine EST l'optimum (score toujours 1.0 sur les 3
+//    dimensions, cf. evaluateEfficiency). Le panneau serait "vrai" mais vide de
+//    sens : rien à optimiser, rien à apprendre.
+//
+//    SOLUTION : gating sur un milestone. Le panneau de score complet (3 jauges +
+//    score global) ne s'affiche qu'à partir de SCORE_PANEL_UNLOCK_MILESTONE_ID.
+//
+//    CHOIX : M2 (ms-iron-rod-60, ~4 min), pas M1.
+//      - À M1 (Constructor débloqué, ~2 min) : le joueur vient JUSTE de poser son
+//        2e type de machine. L'usine a encore 1 seule "route" possible (Smelter
+//        → ... rien d'autre encore) : le score serait 1.0 partout, sans variation
+//        possible → pas instructif, et révéler un "1.0/1.0/1.0" comme toute
+//        première impression du score banalise la mécanique différenciatrice.
+//      - À M2 (Miner Mk.2 débloqué, ~4 min) : le joueur a au moins Smelter +
+//        Constructor (Iron Rod) posés, ET un choix de capacité d'extraction
+//        (Mk.1 vs Mk.2) vient de s'ouvrir → la première vraie occasion où
+//        "construire plus" ≠ "construire mieux". Le score devient pédagogique :
+//        le joueur peut voir l'effet d'un sur-dimensionnement.
+//
+//    Avant M2, le badge qualitatif PAR MACHINE (levier #5, partie UI) peut déjà
+//    être affiché — il est dérivé de la même formule (`computeEfficiencyScore`)
+//    mais lu localement par machine, ce qui reste informatif même tôt (ex. "ce
+//    Smelter est sur-alimenté"). Seul le PANNEAU GLOBAL (3 jauges + score
+//    pondéré) attend M2.
+//
+//    [À VALIDER avec l'humain : M2 vs M1 — si le playtest montre que les joueurs
+//     cherchent le score dès M1 par curiosité, on peut avancer le seuil à M1 sans
+//     casser la logique (le score affichera juste 1.0/1.0/1.0, ce qui reste vrai).]
+// ---------------------------------------------------------------------------
+
+/**
+ * Id du milestone à partir duquel le panneau de score d'efficacité COMPLET
+ * (3 dimensions + score global) devient visible dans l'UI. Avant ce milestone,
+ * seul le badge qualitatif par machine (cf. EFFICIENCY_BADGE_THRESHOLDS) peut
+ * être affiché, le cas échéant.
+ */
+export const SCORE_PANEL_UNLOCK_MILESTONE_ID = 'ms-iron-rod-60'; // M2, ~4 min
+
+// ---------------------------------------------------------------------------
+// 6ter. BADGE QUALITATIF PAR MACHINE — levier #5 (lecture locale du score)
+//
+//    Dérivé du même `score` par dimension que computeEfficiencyScore (∈ [0,1],
+//    1.0 = optimal). Pour une machine individuelle, le score le plus pertinent
+//    en early game est la dimension RESSOURCES (ai-je le bon ratio d'intrants
+//    pour ma sortie ?) — c'est la dimension la plus visible/actionnable pour un
+//    débutant (les dimensions machines/énergie demandent une vue d'ensemble).
+//
+//    SEUILS (mêmes graduations que le score global, qualitatives) :
+//      - score ≥ 0.9        → "Optimal"        (au plus 10 % de surcoût vs LP)
+//      - 0.6 ≤ score < 0.9  → "Correct"         (marge de manœuvre, pas critique)
+//      - score < 0.6        → "Peut mieux faire" (sur-dimensionnement net : ex.
+//                              2 machines pour produire ce qu'1 suffirait)
+//
+//    Justification du seuil 0.9 : un ratio d'intrants à ±10 % de l'optimum LP est
+//    le bruit normal d'un dimensionnement entier (on ne peut pas poser "1.3
+//    machine") — pénaliser sous ce seuil créerait un badge "Peut mieux faire"
+//    permanent même pour une usine raisonnable, ce qui serait décourageant
+//    (faux négatif). Le seuil 0.6 isole les cas de sur-dimensionnement flagrant
+//    (≥ 40 % de surcoût), seuils alignés sur PRESTIGE_MIN_EFFICIENCY (0.75) qui
+//    se situe entre les deux — cohérence : "Correct" est le palier normal pour
+//    progresser vers le prestige, "Optimal" le dépasse confortablement.
+// ---------------------------------------------------------------------------
+
+export const EFFICIENCY_BADGE_THRESHOLDS = {
+  optimal: 0.9,
+  correct: 0.6,
+} as const;
+
+export type EfficiencyBadge = 'optimal' | 'correct' | 'needs-improvement';
+
+/**
+ * Convertit un score de dimension (∈ [0,1], 1.0 = optimal) en badge qualitatif
+ * pour affichage par machine.
+ */
+export function efficiencyBadgeForScore(score: number): EfficiencyBadge {
+  if (score >= EFFICIENCY_BADGE_THRESHOLDS.optimal) return 'optimal';
+  if (score >= EFFICIENCY_BADGE_THRESHOLDS.correct) return 'correct';
+  return 'needs-improvement';
 }
 
 // ---------------------------------------------------------------------------

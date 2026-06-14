@@ -178,9 +178,56 @@ function computeFedByNode(
       if (e.target !== node.id || e.targetHandle !== targetHandle) continue;
       incoming += plans.get(e.id)?.ratePerMin ?? 0;
     }
-    fed.set(node.id, incoming >= required - FUEL_EPS);
+    // Réserve de démarrage : un générateur qui a encore du charbon en trémie est alimenté
+    // même si le convoyeur ne suffit pas (il puisera dans la réserve — drain par le tick de
+    // jeu, cf. nextGeneratorReserves). Réserve vide ou absente → règle normale du combustible.
+    const reserve = (node.data.coalReserve as number | undefined) ?? 0;
+    fed.set(node.id, incoming >= required - FUEL_EPS || reserve > FUEL_EPS);
   }
   return fed;
+}
+
+/**
+ * Réserves de charbon des générateurs après `dtMin` minutes de jeu : un générateur qui ne
+ * reçoit pas assez de combustible par convoyeur puise dans sa réserve de démarrage
+ * (cf. MachineNodeData.coalReserve). PUR. Renvoie les nouvelles réserves UNIQUEMENT pour
+ * les nodes dont la valeur change (drain effectif > 0), pour que l'appelant n'écrive que le
+ * strict nécessaire dans le store (pas de churn de persistance).
+ *
+ * Convergence : si le convoyeur de charbon couvre la demande (incoming ≥ required), le
+ * shortfall est nul et la réserve ne bouge pas — elle reste un filet de sécurité inerte.
+ */
+export function nextGeneratorReserves(
+  nodes: MachineNode[],
+  edges: Edge[],
+  game: GameData,
+  summary: FactorySummary,
+  dtMin: number,
+): Map<string, number> {
+  const updates = new Map<string, number>();
+  if (dtMin <= 0) return updates;
+  const planByEdge = new Map(summary.edges.map((p) => [p.edgeId, p]));
+  for (const node of nodes) {
+    const building = game.buildings.find((b) => b.id === node.data.buildingId);
+    if (!building || building.category !== 'power') continue;
+    const reserve = (node.data.coalReserve as number | undefined) ?? 0;
+    if (reserve <= 0) continue;
+    const req = generatorFuelRequirement(building.id, game);
+    if (!req) continue;
+    const count = Math.max(1, node.data.count ?? 1);
+    const required = req.ratePerMin * count;
+    const targetHandle = `in-${req.itemId}`;
+    let incoming = 0;
+    for (const e of edges) {
+      if (e.target !== node.id || e.targetHandle !== targetHandle) continue;
+      incoming += planByEdge.get(e.id)?.ratePerMin ?? 0;
+    }
+    const shortfall = required - incoming;
+    if (shortfall <= FUEL_EPS) continue;
+    const newReserve = Math.max(0, reserve - shortfall * dtMin);
+    if (newReserve !== reserve) updates.set(node.id, round(newReserve));
+  }
+  return updates;
 }
 
 function runPass(

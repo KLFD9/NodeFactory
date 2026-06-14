@@ -83,14 +83,14 @@ export function reputationPayoutMult(rep: number): number {
 // ---------------------------------------------------------------------------
 
 const CLIENT_PREFIX = ['Vortex', 'Helios', 'Drax', 'Kappa', 'Meridian', 'Orion', 'Cobalt', 'Atlas', 'Nyx', 'Pyra'];
-const CLIENT_SUFFIX = ['Industries', 'Syndicate', 'Labs', 'Logistics', 'Corp', 'Dynamics', 'Foundries', 'Collective'];
+const CLIENT_SUFFIX = ['AI', 'Labs', 'Systems', 'Dynamics', 'Intelligence', 'Robotics', 'Compute', 'Ventures'];
 
 const FLAVOR_TEMPLATES = [
-  'Notre chaîne de %item% est à l’arrêt. Sauvez notre trimestre.',
-  'Rupture de stock critique sur le %item%. On compte sur vous.',
-  'Commande urgente : il nous faut du %item%, et vite.',
-  'Nos actionnaires réclament du %item%. Beaucoup de %item%.',
-  'Un concurrent nous a lâchés. Livrez-nous le %item% promis.',
+  'Notre produit a besoin de %item% en prod. Sauvez notre roadmap.',
+  'Pic de trafic API : il nous faut du %item%, et vite.',
+  'Notre démo investisseurs dépend du %item%. Ne nous lâchez pas.',
+  'Les utilisateurs réclament du %item%. Beaucoup de %item%.',
+  'Notre fournisseur de modèle nous a lâchés. Livrez le %item% promis.',
 ];
 
 // ---------------------------------------------------------------------------
@@ -136,10 +136,10 @@ export interface ActiveContract {
 
 export const LAUNCH_CONTRACT: ContractOffer = {
   id: 'contract-launch',
-  clientName: 'FICSIT Bootstrap',
-  flavor: 'Bienvenue, ingénieur. Premier mandat : produisez-nous 60 lingots de fer.',
+  clientName: 'Seed Round',
+  flavor: 'Bienvenue, fondateur. Premier livrable pour la démo investisseurs : 60 Clean Tokens.',
   itemId: 'iron-ingot',
-  itemName: 'Iron Ingot',
+  itemName: 'Clean Tokens',
   quantity: 60,
   risk: 'standard',
   reward: 80,

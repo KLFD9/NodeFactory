@@ -5,7 +5,12 @@ import { useGraphStore, type MachineNode } from '@/store/useGraphStore';
 import type { GameData } from '@/data/types';
 import { useProgressionStore } from '@/store/useProgressionStore';
 import { allowedAlternateRecipeIds } from '@/game/progression';
-import type { EfficiencyScore } from '@/game/balance';
+import {
+  SCORE_PANEL_UNLOCK_MILESTONE_ID,
+  efficiencyBadgeForScore,
+  type EfficiencyScore,
+  type EfficiencyBadge,
+} from '@/game/balance';
 import { computeFactoryAndPower, type ItemRate } from '@/graph/computeFactory';
 import type { PowerNetwork } from '@/graph/power';
 import type { Objective } from '@/solver';
@@ -229,6 +234,41 @@ function ScoreCard({ score }: { score: EfficiencyScore }) {
             </span>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+const BADGE_META: Record<EfficiencyBadge, { label: string; color: string; hint: string }> = {
+  optimal: { label: 'Optimal', color: '#10b981', hint: 'Ton usine est au plus proche de l’optimum.' },
+  correct: { label: 'Correct', color: '#f59e0b', hint: 'Ça tourne bien — encore un peu de marge.' },
+  'needs-improvement': {
+    label: 'Peut mieux faire',
+    color: '#ef4444',
+    hint: 'Sur-dimensionnement : tu utilises plus que nécessaire.',
+  },
+};
+
+/**
+ * Badge qualitatif d'efficacité (avant déblocage du panneau complet, < M2). Hook : on cache
+ * les 3 dimensions LP et le pourcentage — juste un verdict lisible, dérivé du MÊME score réel
+ * (efficiencyBadgeForScore sur le score global). Progressive disclosure : le détail vient à M2.
+ */
+function QualitativeBadge({ score }: { score: EfficiencyScore }) {
+  const badge = efficiencyBadgeForScore(score.global);
+  const meta = BADGE_META[badge];
+  return (
+    <div
+      className="flex items-center gap-2.5 rounded-lg border bg-zinc-950/40 px-3 py-2.5"
+      style={{ borderColor: `${meta.color}40` }}
+      data-testid="efficiency-badge"
+    >
+      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: meta.color }} />
+      <div className="min-w-0">
+        <div className="text-[10px] font-mono font-bold uppercase tracking-wider" style={{ color: meta.color }}>
+          {meta.label}
+        </div>
+        <div className="text-[10px] text-zinc-400 leading-snug">{meta.hint}</div>
       </div>
     </div>
   );
@@ -774,6 +814,9 @@ export function FactorySummaryPanel() {
   const setGraph = useGraphStore((s) => s.setGraph);
   // Production cumulée PERSISTANTE (ne se réinitialise jamais, même en changeant de panneau).
   const cumulativeProduced = useProgressionStore((s) => s.cumulativeProduced);
+  const reachedMilestones = useProgressionStore((s) => s.reachedMilestones);
+  // Score complet (3 dimensions) gaté à M2 : avant, seul un badge qualitatif est montré.
+  const scorePanelUnlocked = reachedMilestones.includes(SCORE_PANEL_UNLOCK_MILESTONE_ID);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -884,10 +927,15 @@ export function FactorySummaryPanel() {
 
         {score ? (
           <div className="flex flex-col gap-1">
-            <ScoreCard score={score} />
+            {scorePanelUnlocked ? <ScoreCard score={score} /> : <QualitativeBadge score={score} />}
             {summary.deficits.length > 0 && (
               <p className="text-[9px] text-amber-500/70 font-mono">
                 * Usine incomplète : score basé sur la prod actuelle.
+              </p>
+            )}
+            {!scorePanelUnlocked && (
+              <p className="text-[9px] text-zinc-500 font-mono leading-snug">
+                Score détaillé (3 axes) débloqué au palier Iron Rod.
               </p>
             )}
             <button
@@ -906,9 +954,9 @@ export function FactorySummaryPanel() {
               onClick={onEvaluate}
               disabled={scoreBusy}
               className="w-full rounded border border-zinc-700 bg-zinc-900/40 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:border-emerald-600/60 hover:text-emerald-400 hover:bg-emerald-950/10 disabled:opacity-40 transition-colors cursor-pointer"
-              title="Comparer ton usine à l'optimum LP"
+              title={scorePanelUnlocked ? "Comparer ton usine à l'optimum LP" : "Verdict rapide d'efficacité (score détaillé à M2)"}
             >
-              {scoreBusy ? 'Évaluation…' : '⚖ Évaluer l’efficacité'}
+              {scoreBusy ? 'Évaluation…' : scorePanelUnlocked ? '⚖ Évaluer l’efficacité' : '⚖ Analyser l’usine'}
             </button>
             {scoreError && <p className="mt-1 text-[9px] text-amber-400 font-mono">{scoreError}</p>}
           </div>

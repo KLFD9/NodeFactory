@@ -10,6 +10,7 @@ import { machineUpgradeCost } from '@/game/balance';
 import { useProgressionStore } from '@/store/useProgressionStore';
 import { computeMachineStatus, type MachineState } from '@/graph/machineStatus';
 import { ExtractionIcon, SmeltingIcon, ManufacturingIcon, LogisticsIcon, PowerIcon } from '@/ui/icons';
+import { CoalGeneratorIllustration } from '@/ui/nodes/illustrations/CoalGeneratorIllustration';
 import { ItemIcon } from '@/ui/assets';
 import { NodeFlowContext, PowerContext, PowerConnectionsContext, PowerNetworkContext, ActivePowerNodesContext, AnyPowerNetworkActiveContext } from '@/ui/NodeFlowContext';
 
@@ -797,29 +798,54 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
     const demand = net?.totalDemandMW ?? 0;
     const capacity = net?.totalGenMW ?? info.powerMW;
 
+    // Vitesse de rotation des turbines selon l'état machine
+    let turbineSpeedVar = '0s';
+    if (isNominal && powered) {
+      turbineSpeedVar = '1.2s';
+    } else if (machineState === 'starved' && powered) {
+      turbineSpeedVar = '4s';
+    }
+
+    const loadRatio = capacity > 0 ? Math.min(demand / capacity, 1) : 0;
+    const loadPercent = Math.round(loadRatio * 100);
+
+    // Combustible (premier intrant non-énergie, typiquement le charbon)
+    const coalInput = info.inputs[0];
+    const actualCoalRate = coalInput ? actualFlow?.inputs.get(coalInput.itemId) : undefined;
+    const coalConsumed = coalInput?.ratePerMin ?? 0;
+    const coalStarved = actualCoalRate !== undefined && actualCoalRate < coalConsumed - 0.01;
+
     return (
       <div
         style={styleVariables}
         className={[
-          'relative min-h-[132px] w-[300px] text-xs shadow-2xl transition-all duration-300 nf-generator-node flex flex-col overflow-visible',
+          'relative h-[156px] w-[280px] text-xs shadow-2xl transition-all duration-300 nf-generator-node flex flex-col overflow-visible',
           selected ? 'nf-node-selected-glow scale-[1.01]' : '',
         ].join(' ')}
       >
-        <div ref={particleContainerRef} className="absolute inset-0 pointer-events-none overflow-visible z-30" />
-        {selected && <HudBrackets color="#10b981" />}
         <NodeActions id={id} data={data} />
 
-        {/* 1. POWER LOGO & STATUS HEADER */}
-        <div className="flex items-center justify-between gap-2 border-b border-zinc-900 px-3 py-2 bg-zinc-950/40 relative z-10 rounded-t-xl">
-          <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0 shadow-sm animate-pulse">
-              <PowerIcon className="h-4 w-4" />
+        {/* Illustration vectorielle 2.5D (prototype, vue du dessus) */}
+        <div className="absolute inset-0 rounded-[10px] pointer-events-none">
+          <CoalGeneratorIllustration state={machineState ?? 'unpowered'} powered={powered} turbineSpeed={turbineSpeedVar} />
+        </div>
+
+        {/* 1. HUD : en-tête (nom + statut) */}
+        <div className="relative z-10 flex items-start justify-between gap-2 p-2">
+          <div className="flex flex-col gap-0.5 bg-zinc-950/80 backdrop-blur-sm rounded-md px-2 py-1 border border-zinc-800/60 shadow-[0_2px_6px_rgba(0,0,0,0.5)]">
+            <div className="flex items-center gap-1.5">
+              <PowerIcon className="h-3 w-3 text-emerald-400" />
+              <span className="font-extrabold tracking-tight text-emerald-400 text-[10px] uppercase font-mono leading-none">
+                {building?.name === 'Coal Generator' ? 'Générateur Charbon' : (building?.name ?? 'Coal Generator')}
+              </span>
+            </div>
+            <span className="text-[7px] font-mono text-emerald-400/50 uppercase tracking-widest select-none leading-none">
+              {isNominal && powered ? 'SYS_OK · PRES: 8.5 BAR' : machineState === 'starved' ? 'ERR_FUEL · PRES: 0.2 BAR' : !powered ? 'ERR_POWER · STANDBY' : 'ERR_BLOCKED · OVERPRESSURE'}
             </span>
-            <span className="font-extrabold tracking-tight text-zinc-100 text-[12.5px] uppercase">{building?.name ?? 'Coal Generator'}</span>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <span className="rounded bg-zinc-800/80 px-1.5 py-0.5 text-[8.5px] font-extrabold text-zinc-400 border border-zinc-700/30 flex items-center font-mono">
+            <span className="nf-power-switch rounded-md px-1.5 py-0.5 text-[8.5px] font-extrabold text-zinc-400 flex items-center font-mono">
               <span className="text-emerald-450 drop-shadow-[0_0_2px_rgba(16,185,129,0.5)]">
                 {rotation === 0 && '▶'}
                 {rotation === 90 && '▼'}
@@ -831,132 +857,81 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
             {(() => {
               const stateKey = machineState || 'unpowered';
               return (
-                <span
-                  className="h-2 w-2 shrink-0 rounded-full relative z-10 nf-diode-glow"
-                  style={{
-                    '--state-color': STATE_STYLE[stateKey].color,
-                    background: STATE_STYLE[stateKey].color,
-                    animation:
-                      stateKey === 'nominal' ? undefined : 'nf-activity-dot 1s ease-in-out infinite',
-                  } as React.CSSProperties}
-                />
+                <span className="nf-power-switch flex h-5 w-5 shrink-0 items-center justify-center rounded-full">
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full relative z-10 nf-diode-glow"
+                    style={{
+                      '--state-color': STATE_STYLE[stateKey].color,
+                      background: STATE_STYLE[stateKey].color,
+                      animation:
+                        stateKey === 'nominal' ? undefined : 'nf-activity-dot 1s ease-in-out infinite',
+                    } as React.CSSProperties}
+                  />
+                </span>
               );
             })()}
           </div>
         </div>
 
-        {/* 2. MAIN CORE CHAMBER - HORIZONTAL LAYOUT */}
-        <div className="flex flex-1 p-3 gap-2 bg-[#060c09] rounded-b-xl relative overflow-hidden">
-          <div className="absolute inset-0 pointer-events-none nf-furnace-grid opacity-15 z-0" />
-
-          {/* Left: Input slot (Charcoal Feeding) */}
-          <div className="flex-1 flex flex-col justify-center items-center z-10">
-            {info.inputs.length > 0 ? (
-              <div className="flex flex-col items-center gap-1">
-                <span className="text-[7.5px] font-black uppercase text-zinc-450 tracking-wider select-none mb-0.5">Fuel Supply</span>
-                {info.inputs.map((input, idx) => {
-                  const actualRate = actualFlow?.inputs.get(input.itemId);
-                  const consumed = input.ratePerMin;
-                  const connected = actualRate !== undefined;
-                  const starved = connected && actualRate < consumed - 0.01;
-
-                  return (
-                    <div 
-                      key={idx} 
-                      className="flex flex-col items-center justify-center p-2 rounded-xl bg-zinc-900/60 border border-zinc-800/60 border-l-[2.5px] border-l-orange-500 w-20 shrink-0"
-                    >
-                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-zinc-950 border border-zinc-800 shadow-[inset_0_2px_4px_rgba(0,0,0,0.9)] mb-1.5 transition-all duration-300 hover:border-orange-500/50 hover:shadow-[0_0_8px_rgba(249,115,22,0.25),inset_0_2px_4px_rgba(0,0,0,0.9)]">
-                        <ItemIcon itemId={input.itemId} size={32} />
-                      </div>
-                      
-                      {connected && starved ? (
-                        <span className="font-mono flex items-baseline gap-0.5 bg-zinc-900/80 px-1.5 py-0.5 rounded border border-zinc-800 text-[8.5px] font-bold">
-                          <span className="font-extrabold text-amber-450 animate-pulse">{round(actualRate)}</span>
-                          <span className="text-[7.5px] text-zinc-455">/{round(consumed)}</span>
-                        </span>
-                      ) : (
-                        <span className="text-[8.5px] text-orange-400 font-mono font-bold bg-orange-500/5 px-2 py-0.5 rounded border border-orange-500/15">{round(consumed)}/m</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full p-2 border border-dashed border-zinc-800/40 rounded-lg text-zinc-550 text-[8px] uppercase select-none">
-                No Fuel Required
-              </div>
-            )}
-          </div>
-
-          {/* Center: Combustion Furnace & Steam Turbine */}
-          <div className="w-[88px] flex flex-col items-center justify-center gap-2 relative z-10 border-l border-r border-zinc-900/60 px-1">
-            <span className="text-[7px] font-black uppercase text-zinc-450 tracking-widest select-none">Combustion</span>
-            
-            {/* Turbine circular viewport & Boiler furnace */}
-            <div className="w-[58px] h-[58px] rounded-full border border-zinc-850 bg-zinc-950 shadow-[inset_0_2px_4px_rgba(0,0,0,0.95)] flex flex-col items-center relative overflow-hidden shrink-0">
-              
-              {/* Upper half: Steam turbine blades */}
-              <div className="w-full h-1/2 flex items-center justify-center relative overflow-hidden border-b border-zinc-900">
-                <svg 
-                  className={`w-6 h-6 text-emerald-400/80 animate-generator-turbine`} 
-                  viewBox="0 0 24 24" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  strokeWidth="2"
-                  style={{ '--turbine-speed': isNominal && powered ? '1.2s' : '0s' } as React.CSSProperties}
-                >
-                  <circle cx="12" cy="12" r="2" />
-                  <path d="M12 2v10M12 12l7-7M12 12l7 7M12 12v10M12 12l-7 7M12 12l-7-7" />
-                </svg>
-              </div>
-
-              {/* Lower half: Glowing coal combustion fire */}
-              <div className="w-full h-1/2 nf-generator-furnace flex items-center justify-center">
-                {isNominal && powered ? (
-                  <div className="absolute inset-0 bg-radial from-orange-500/80 via-red-600/40 to-transparent animate-generator-fire" />
-                ) : (
-                  <div className="absolute inset-0 bg-zinc-900" />
-                )}
-                <span className="text-[6.5px] font-mono text-orange-500/85 z-10 font-bold select-none tracking-tighter drop-shadow-[0_0_2px_rgba(249,115,22,0.4)]">
-                  {isNominal && powered ? 'FIRE_OK' : 'OFFLINE'}
+        {/* 2. HUD : badges de télémétrie superposés à l'illustration */}
+        <div className="relative z-10 flex-1 flex items-end justify-between px-2 pb-2 gap-1">
+          {/* Trémie : débit de charbon */}
+          <div className="flex flex-col items-center gap-0.5 bg-zinc-950/80 backdrop-blur-sm rounded-md px-1.5 py-1 border border-zinc-800/60 shadow-[0_2px_6px_rgba(0,0,0,0.5)]">
+            {coalConsumed > 0 ? (
+              coalStarved ? (
+                <span className="font-mono flex items-baseline gap-0.5 text-[9px] font-bold">
+                  <span className="font-extrabold text-amber-450 animate-pulse">{round(actualCoalRate!)}</span>
+                  <span className="text-[7px] text-zinc-500">/{round(coalConsumed)}</span>
                 </span>
-              </div>
+              ) : (
+                <span className="text-[9px] text-orange-400 font-mono font-bold">{round(coalConsumed)}/m</span>
+              )
+            ) : (
+              <span className="text-[8px] text-zinc-500 font-mono uppercase">Sans combustible</span>
+            )}
+            <span className="text-[6px] text-zinc-500 uppercase tracking-widest font-mono leading-none">Charbon</span>
+          </div>
 
-              <div className="absolute inset-0 border border-zinc-900/60 rounded-full pointer-events-none z-20" />
-            </div>
-
+          {/* Turbines : état de combustion + cycle */}
+          <div className="flex flex-col items-center gap-1 bg-zinc-950/80 backdrop-blur-sm rounded-md px-2 py-1 border border-zinc-800/60 shadow-[0_2px_6px_rgba(0,0,0,0.5)]">
+            <span className="text-[7px] font-mono text-orange-500/85 font-bold select-none tracking-tighter">
+              {isNominal && powered ? 'FEU_ACTIF' : 'ARRETE'}
+            </span>
             {cycleTime > 0 ? (
-              <div className="w-full flex flex-col items-center gap-0.5">
-                <div className="w-[64px] h-1.5 relative rounded bg-zinc-950/90 border border-zinc-850/80 overflow-hidden shadow-inner">
-                  <div
-                    className="absolute inset-y-0 left-0 rounded-l"
-                    style={{
-                      width: '100%',
-                      background: 'linear-gradient(90deg, #059669, #10b981 80%, #a7f3d0 100%)',
-                      boxShadow: '0 0 6px 1px rgba(16, 185, 129, 0.6)',
-                      transformOrigin: 'left center',
-                      animation: `nf-cycle ${cycleTime}s linear infinite`,
-                    } as React.CSSProperties}
-                  />
-                </div>
+              <div className="w-[64px] h-1.5 relative rounded bg-zinc-950/90 border border-zinc-800/80 overflow-hidden shadow-inner">
+                <div
+                  className="absolute inset-y-0 left-0 rounded-l nf-ember-bar"
+                  style={{
+                    width: '100%',
+                    boxShadow: '0 0 6px 1px rgba(249, 115, 22, 0.6)',
+                    transformOrigin: 'left center',
+                    animation: `nf-cycle ${cycleTime}s linear infinite`,
+                  } as React.CSSProperties}
+                />
               </div>
             ) : (
-              <span className="text-[7px] font-extrabold uppercase text-zinc-550 tracking-wider text-center select-none">Idle</span>
+              <span className="text-[7px] font-extrabold uppercase text-zinc-550 tracking-wider select-none font-mono">En veille</span>
             )}
           </div>
 
-          {/* Right: Electricity Telemetry Output slot */}
-          <div className="flex-1 flex flex-col justify-center items-center z-10">
-            <span className="text-[7.5px] font-black uppercase text-zinc-450 tracking-wider select-none mb-1 text-center">Power Output</span>
-            <div className="flex flex-col gap-1.5 bg-zinc-900/60 p-2 rounded-xl border border-zinc-800/60 border-r-[2.5px] border-r-emerald-500 w-20 shrink-0 select-none">
-              <div className="flex items-center gap-1.5 font-bold text-emerald-450">
-                <span className="text-[10px] animate-pulse">⚡</span>
-                <span className="text-[10.5px] font-mono font-extrabold">{info.powerMW} MW</span>
-              </div>
-              <div className="text-[7.5px] font-mono text-zinc-405 tracking-tight flex flex-col gap-0.5 mt-0.5">
-                <span>GRID LOAD:</span>
-                <span className="font-extrabold text-zinc-200">{round(demand)}/{round(capacity)} MW</span>
-              </div>
+          {/* Bloc de raccordement : sortie électrique */}
+          <div className="flex flex-col gap-1 bg-zinc-950/80 backdrop-blur-sm rounded-md px-1.5 py-1 border border-zinc-800/60 shadow-[0_2px_6px_rgba(0,0,0,0.5)] min-w-[68px]">
+            <div className="flex items-center gap-1 font-bold text-emerald-400">
+              <PowerIcon className="h-2.5 w-2.5" />
+              <span className="text-[10px] font-mono font-extrabold">{info.powerMW} MW</span>
+            </div>
+            <div className="text-[6.5px] font-mono text-zinc-400 tracking-tight flex flex-col gap-0.5">
+              <span>CHARGE RESEAU:</span>
+              <span className="font-extrabold text-zinc-200">{round(demand)}/{round(capacity)} MW</span>
+            </div>
+            <div className="w-full h-1 bg-zinc-950 border border-zinc-800/80 rounded-sm overflow-hidden relative">
+              <div
+                className="h-full transition-all duration-500"
+                style={{
+                  width: `${loadPercent}%`,
+                  background: loadRatio > 0.85 ? 'linear-gradient(90deg, #ef4444, #f97316)' : 'linear-gradient(90deg, #10b981, #34d399)'
+                }}
+              />
             </div>
           </div>
         </div>
@@ -1261,7 +1236,7 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
             {info.configured && cycleTime > 0 ? (
               <div className="w-full flex flex-col items-center gap-0.5">
                 <span className="text-[7px] font-black uppercase text-zinc-450 tracking-widest select-none">Melt Cycle</span>
-                <div className="w-[64px] h-1.5 relative rounded bg-zinc-950/90 border border-zinc-850/80 overflow-hidden shadow-inner">
+                <div className="w-[64px] h-1.5 relative rounded bg-zinc-950/90 border border-zinc-800/80 overflow-hidden shadow-inner">
                   <div
                     className="absolute inset-y-0 left-0 rounded-l"
                     style={{

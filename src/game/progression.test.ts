@@ -214,6 +214,43 @@ describe('applyProductionTick — milestones', () => {
   });
 });
 
+describe('applyProductionTick — micro-jalons sous M1', () => {
+  it('franchit les micro-jalons dont le seuil est atteint et les marque vus', () => {
+    const s = freshState();
+    // 30/min × 0.5 min = 15 lingots → franchit micro 1 (target 1) et micro 10 (target 10),
+    // mais pas micro 30 ni M1 (60).
+    const { state, newlyReachedMicro, newlyReached } = applyProductionTick(s, {
+      grossProduction: [{ itemId: 'iron-ingot', ratePerMin: 30 }],
+      totalOutputPerMin: 0,
+      efficiency: 1,
+      dtMin: 0.5,
+      nowMs: NOW + 30_000,
+    });
+    expect(newlyReachedMicro.map((m) => m.id)).toEqual(['micro-first-ingot', 'micro-ten-ingots']);
+    expect(state.reachedMicroMilestones).toEqual(['micro-first-ingot', 'micro-ten-ingots']);
+    expect(newlyReached).toHaveLength(0); // M1 pas encore atteint
+  });
+
+  it('idempotent : un micro-jalon déjà vu ne se re-notifie pas', () => {
+    let s = freshState();
+    ({ state: s } = applyProductionTick(s, {
+      grossProduction: [{ itemId: 'iron-ingot', ratePerMin: 30 }],
+      totalOutputPerMin: 0,
+      efficiency: 1,
+      dtMin: 0.5, // 15 lingots → micro 1 + micro 10 vus
+      nowMs: NOW + 30_000,
+    }));
+    const { newlyReachedMicro } = applyProductionTick(s, {
+      grossProduction: [{ itemId: 'iron-ingot', ratePerMin: 30 }],
+      totalOutputPerMin: 0,
+      efficiency: 1,
+      dtMin: 0.5, // 30 lingots cumulés → seul micro 30 est nouveau
+      nowMs: NOW + 60_000,
+    });
+    expect(newlyReachedMicro.map((m) => m.id)).toEqual(['micro-thirty-ingots']);
+  });
+});
+
 describe('applyProductionTick — contrat livré depuis le stock pré-existant', () => {
   it('un stock accumulé avant acceptation permet une livraison immédiate', () => {
     // L'usine a déjà 80 Iron Ingot en stock (surplus accumulé avant l'acceptation).

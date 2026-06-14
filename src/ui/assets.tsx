@@ -7,18 +7,15 @@
  * d'image, l'UI retombe proprement sur ses icônes SVG par catégorie.
  */
 
-/** Mapping id d'item → chemin de l'image webp (servie depuis /public). */
-const ITEM_IMAGE: Record<string, string> = {
-  // Ressources brutes.
-  'iron-ore': '/images/game/items/raw/ore_iron.webp',
-  'copper-ore': '/images/game/items/raw/ore_copper.webp',
-  limestone: '/images/game/items/raw/ore_limestone.webp',
-  coal: '/images/game/items/raw/ore_coal.webp',
-  // Lingots (seuls `iron-ingot`/`copper-ingot` ont un item correspondant ; `ingot_coal` et
-  // `ingot_limestone` existent sur disque mais sans item de données → non mappés).
-  'iron-ingot': '/images/game/items/ingots/ingot_iron.webp',
-  'copper-ingot': '/images/game/items/ingots/ingot_copper.webp',
-};
+/**
+ * Mapping id d'item → chemin de l'image webp (servie depuis /public).
+ *
+ * VIDE depuis le pivot thématique « Scrappy AI Lab » (2026-06-14) : les anciennes images
+ * (minerais, lingots) contredisaient le thème données/IA. Tant qu'un jeu d'icônes thématiques
+ * n'existe pas, tous les items retombent proprement sur le badge monochrome (lettre), cohérent
+ * avec l'esthétique console de labo. À repeupler avec les futurs assets IA.
+ */
+const ITEM_IMAGE: Record<string, string> = {};
 
 /** Chemin de l'image d'un item, ou `undefined` si aucun asset n'est disponible. */
 export function itemImage(itemId: string): string | undefined {

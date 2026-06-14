@@ -9,7 +9,14 @@ import {
   type ProgressionState,
   type TickInput,
 } from '@/game/progression';
-import { STARTING_BOLTS, STARTING_RP, shouldShowOfflineRecap, type MilestoneDefinition } from '@/game/balance';
+import {
+  STARTING_BOLTS,
+  STARTING_RP,
+  shouldShowOfflineRecap,
+  EARLY_PRODUCTION_MICRO_MILESTONES,
+  type MilestoneDefinition,
+  type ProductionMicroMilestone,
+} from '@/game/balance';
 import type { ContractOffer } from '@/game/contracts';
 
 /** Récapitulatif des gains hors-ligne, en attente d'affichage (transitoire). */
@@ -40,6 +47,8 @@ export interface ContractResult {
 interface ProgressionStore extends ProgressionState {
   /** Milestones franchis récemment, en attente d'affichage (transitoire, non persisté). */
   recentUnlocks: MilestoneDefinition[];
+  /** Micro-jalons (sous M1) franchis récemment, en attente d'affichage (transitoire, non persisté). */
+  recentMicroMilestones: ProductionMicroMilestone[];
   /** Récap offline à afficher à la reconnexion (null = rien à montrer ; non persisté). */
   offlineRecap: OfflineRecap | null;
   /** Résultat de contrat à notifier (réussite/échec), transitoire. */
@@ -53,6 +62,8 @@ interface ProgressionStore extends ProgressionState {
   acceptContract: (offerId: string) => void;
   /** Vide la file des déblocages récents (après affichage de la notification). */
   dismissUnlocks: () => void;
+  /** Vide la file des micro-jalons récents (après affichage du toast). */
+  dismissMicroMilestones: () => void;
   /** Ferme la popup récap offline. */
   dismissOfflineRecap: () => void;
   /** Ferme la notification de résultat de contrat. */
@@ -72,12 +83,13 @@ export const useProgressionStore = create<ProgressionStore>()(
     (set, get) => ({
       ...initialProgression(),
       recentUnlocks: [],
+      recentMicroMilestones: [],
       offlineRecap: null,
       contractResult: null,
 
       tick: (input) =>
         set((state) => {
-          const { state: next, newlyReached, contractCompleted, contractFailed } =
+          const { state: next, newlyReached, newlyReachedMicro, contractCompleted, contractFailed } =
             applyProductionTick(state, input);
           const result: ContractResult | null = contractCompleted
             ? { offer: contractCompleted, outcome: 'completed' }
@@ -91,6 +103,10 @@ export const useProgressionStore = create<ProgressionStore>()(
               newlyReached.length > 0
                 ? [...state.recentUnlocks, ...newlyReached]
                 : state.recentUnlocks,
+            recentMicroMilestones:
+              newlyReachedMicro.length > 0
+                ? [...state.recentMicroMilestones, ...newlyReachedMicro]
+                : state.recentMicroMilestones,
           };
         }),
 
@@ -111,6 +127,8 @@ export const useProgressionStore = create<ProgressionStore>()(
 
       dismissUnlocks: () => set({ recentUnlocks: [] }),
 
+      dismissMicroMilestones: () => set({ recentMicroMilestones: [] }),
+
       dismissOfflineRecap: () => set({ offlineRecap: null }),
 
       dismissContractResult: () => set({ contractResult: null }),
@@ -126,11 +144,17 @@ export const useProgressionStore = create<ProgressionStore>()(
       },
 
       reset: () =>
-        set({ ...initialProgression(), recentUnlocks: [], offlineRecap: null, contractResult: null }),
+        set({
+          ...initialProgression(),
+          recentUnlocks: [],
+          recentMicroMilestones: [],
+          offlineRecap: null,
+          contractResult: null,
+        }),
     }),
     {
       name: 'nf-progression',
-      version: 4,
+      version: 5,
       migrate: (persisted, version) => {
         const s = persisted as Record<string, unknown>;
         // v1 → v2 (refonte monnaies) : les anciens AP deviennent des Points de Recherche
@@ -162,6 +186,15 @@ export const useProgressionStore = create<ProgressionStore>()(
           s.contractOffers = [];
           s.offersGeneratedAtGameMin = 0;
         }
+        // v4 → v5 (micro-jalons hook) : nouveau champ. Une partie déjà avancée (M1 franchi)
+        // a typiquement dépassé les seuils — on les marque tous vus pour ne pas spammer au
+        // retour ; une partie neuve (aucun lingot) repart à [] et verra les toasts normalement.
+        if (version < 5) {
+          const ingots = ((s.cumulativeProduced as Record<string, number>) ?? {})['iron-ingot'] ?? 0;
+          s.reachedMicroMilestones = ingots > 0
+            ? EARLY_PRODUCTION_MICRO_MILESTONES.filter((mm) => ingots >= mm.target).map((mm) => mm.id)
+            : [];
+        }
         return s as unknown as ProgressionState;
       },
       // On ne persiste QUE l'état sérialisable, pas les actions ni les notifications transitoires.
@@ -172,6 +205,7 @@ export const useProgressionStore = create<ProgressionStore>()(
         itemStock: s.itemStock,
         nodeCumulativeProduced: s.nodeCumulativeProduced,
         reachedMilestones: s.reachedMilestones,
+        reachedMicroMilestones: s.reachedMicroMilestones,
         unlockedBuildings: s.unlockedBuildings,
         unlockedRecipes: s.unlockedRecipes,
         lastSeenMs: s.lastSeenMs,

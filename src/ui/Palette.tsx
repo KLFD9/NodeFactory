@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useFactoryStore } from '@/store/useFactoryStore';
+import { useGraphStore } from '@/store/useGraphStore';
 import { useProgressionStore } from '@/store/useProgressionStore';
 import { isBuildingUnlocked } from '@/game/progression';
 import { BUILDING_COSTS } from '@/game/balance';
@@ -17,35 +18,35 @@ interface CategoryMeta {
 
 const CATEGORY: Record<BuildingCategory, CategoryMeta> = {
   extraction: {
-    label: 'Extraction',
+    label: 'Ingestion',
     icon: ExtractionIcon,
     chip: 'bg-amber-500 text-zinc-950 font-bold',
     color: '#f59e0b',
     glow: 'rgba(245,158,11,0.2)',
   },
   smelting: {
-    label: 'Fonderie',
+    label: 'Préparation',
     icon: SmeltingIcon,
     chip: 'bg-orange-500 text-zinc-950 font-bold',
     color: '#f97316',
     glow: 'rgba(249,115,22,0.2)',
   },
   manufacturing: {
-    label: 'Fabrication',
+    label: 'Entraînement',
     icon: ManufacturingIcon,
     chip: 'bg-sky-400 text-zinc-950 font-bold',
     color: '#38bdf8',
     glow: 'rgba(56,189,248,0.2)',
   },
   logistics: {
-    label: 'Logistique',
+    label: 'Routage',
     icon: LogisticsIcon,
     chip: 'bg-zinc-500 text-zinc-950 font-bold',
     color: '#71717a',
     glow: 'rgba(113,113,122,0.15)',
   },
   power: {
-    label: 'Énergie',
+    label: 'Compute',
     icon: PowerIcon,
     chip: 'bg-emerald-500 text-zinc-950 font-bold',
     color: '#10b981',
@@ -56,17 +57,17 @@ const CATEGORY: Record<BuildingCategory, CategoryMeta> = {
 const ORDER: BuildingCategory[] = ['extraction', 'smelting', 'manufacturing', 'logistics', 'power'];
 
 const BUILDING_CODES: Record<string, string> = {
-  'miner-mk1': 'MNR-01',
-  'miner-mk2': 'MNR-02',
-  'miner-mk3': 'MNR-03',
-  smelter: 'SML-01',
-  foundry: 'FND-02',
-  constructor: 'CNS-01',
-  assembler: 'ASM-02',
-  manufacturer: 'MFG-03',
-  refinery: 'RFN-04',
-  'coal-generator': 'CGN-01',
-  'power-pole': 'POL-02',
+  'miner-mk1': 'HRV-01',
+  'miner-mk2': 'HRV-02',
+  'miner-mk3': 'HRV-03',
+  smelter: 'CLN-01',
+  foundry: 'CUR-02',
+  constructor: 'TRN-01',
+  assembler: 'FTR-02',
+  manufacturer: 'CLU-03',
+  refinery: 'SYN-04',
+  'coal-generator': 'DC-01',
+  'power-pole': 'RLY-02',
   splitter: 'SPL-01',
   merger: 'MRG-02',
 };
@@ -83,8 +84,14 @@ export function Palette() {
   // Référence stable entre les ticks (le sélecteur ne change que lors d'un déblocage).
   const unlockedBuildings = useProgressionStore((s) => s.unlockedBuildings);
   const bolts = useProgressionStore((s) => s.bolts);
+  const nodes = useGraphStore((s) => s.nodes);
   const [query, setQuery] = useState('');
   if (!gameData) return <p className="text-xs text-zinc-500">Chargement…</p>;
+
+  // « NEW » = bâtiment débloqué par un milestone (récompense) mais encore jamais posé.
+  // Dérivé du graphe live : le badge disparaît dès la première pose, sans état persisté.
+  const placedBuildingIds = new Set(nodes.map((n) => n.data.buildingId));
+  const isNew = (b: Building) => unlockedBuildings.includes(b.id) && !placedBuildingIds.has(b.id);
 
   const q = query.trim().toLowerCase();
   // Disponible = correspond à la recherche ET débloqué (kit de base + milestones franchis).
@@ -178,8 +185,18 @@ export function Palette() {
                      <div className="flex-1 min-w-0 z-10">
                        {/* Name and serial code row */}
                        <div className="flex items-center justify-between gap-2">
-                         <span className="truncate text-xs font-bold text-zinc-200 group-hover:text-zinc-50 transition-colors">
-                           {b.name}
+                         <span className="flex min-w-0 items-center gap-1.5">
+                           <span className="truncate text-xs font-bold text-zinc-200 group-hover:text-zinc-50 transition-colors">
+                             {b.name}
+                           </span>
+                           {isNew(b) && (
+                             <span
+                               className="shrink-0 rounded-sm bg-emerald-500/15 border border-emerald-500/40 px-1 py-0.5 font-mono text-[8px] font-bold uppercase tracking-wider text-emerald-300 animate-pulse"
+                               data-testid="palette-new-badge"
+                             >
+                               NEW
+                             </span>
+                           )}
                          </span>
                          <span className="shrink-0 font-mono text-[9px] text-zinc-550 group-hover:text-[var(--hover-color-border)] opacity-80 transition-colors">
                            {code}

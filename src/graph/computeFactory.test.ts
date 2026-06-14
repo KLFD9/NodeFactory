@@ -3,7 +3,7 @@ import type { Edge } from '@xyflow/react';
 import { loadMockGameData } from '@/test/loadMock';
 import type { GameData } from '@/data/types';
 import type { MachineNode, MachineNodeData } from '@/store/useGraphStore';
-import { computeFactory, planBelt } from './computeFactory';
+import { computeFactory, nextGeneratorReserves, planBelt } from './computeFactory';
 
 const game = loadMockGameData();
 
@@ -49,11 +49,11 @@ describe('computeFactory (bilan matière + énergie)', () => {
     expect(summary.deficits.find((d) => d.itemId === 'iron-ingot')).toBeUndefined();
     // Minerai brut à importer : 90/min.
     expect(summary.rawInputs).toEqual([
-      { itemId: 'iron-ore', itemName: 'Iron Ore', ratePerMin: 90 },
+      { itemId: 'iron-ore', itemName: 'Text Corpus', ratePerMin: 90 },
     ]);
     // Surplus de plaques : 60/min.
     expect(summary.surplus).toEqual([
-      { itemId: 'iron-plate', itemName: 'Iron Plate', ratePerMin: 60 },
+      { itemId: 'iron-plate', itemName: 'Embeddings', ratePerMin: 60 },
     ]);
   });
 
@@ -61,7 +61,7 @@ describe('computeFactory (bilan matière + énergie)', () => {
     const nodes = [machine('c', { buildingId: 'constructor', recipeId: 'iron-plate', count: 3 })];
     const summary = computeFactory(nodes, [], game, NO_POWER());
     expect(summary.deficits).toEqual([
-      { itemId: 'iron-ingot', itemName: 'Iron Ingot', ratePerMin: 90 },
+      { itemId: 'iron-ingot', itemName: 'Clean Tokens', ratePerMin: 90 },
     ]);
   });
 
@@ -288,6 +288,23 @@ describe('computeFactory — gating électrique (pas de courant, pas de producti
     expect(summary.production).toEqual([]);
   });
 
+  it('générateur AVEC réserve de charbon (sans convoyeur) → alimenté → la chaîne produit', () => {
+    // Même topologie que le cas « sans charbon entrant » (hors tension), mais la réserve de
+    // démarrage rend le générateur alimenté immédiatement : la chaîne fer vit avant la boucle charbon.
+    const nodes = [
+      ...chain(),
+      machine('gen', { buildingId: 'coal-generator', recipeId: 'coal-generator-power', coalReserve: 60 }),
+    ];
+    const edges: Edge[] = [
+      belt,
+      { id: 'p1', source: 'gen', target: 'miner', sourceHandle: 'power-out', targetHandle: 'power-in' },
+      { id: 'p2', source: 'gen', target: 'smelter', sourceHandle: 'power-out', targetHandle: 'power-in' },
+    ];
+    const summary = computeFactory(nodes, edges, game);
+    expect(summary.unpoweredMachines).toBe(0);
+    expect(summary.production.find((p) => p.itemId === 'iron-ingot')?.ratePerMin).toBe(30);
+  });
+
   it('générateur nourri (mineur de charbon dédié) → tout le réseau tourne', () => {
     const nodes = [
       ...chain(),
@@ -306,5 +323,47 @@ describe('computeFactory — gating électrique (pas de courant, pas de producti
     // miner + smelter + coal-miner + gen (configuré via recipeId)
     expect(summary.totalMachines).toBe(4);
     expect(summary.production.find((p) => p.itemId === 'iron-ingot')?.ratePerMin).toBe(30);
+  });
+});
+
+describe('nextGeneratorReserves (drain de la réserve de charbon)', () => {
+  it('générateur sans charbon entrant → réserve drainée au débit de consommation', () => {
+    const nodes = [
+      machine('gen', { buildingId: 'coal-generator', recipeId: 'coal-generator-power', coalReserve: 60 }),
+    ];
+    const summary = computeFactory(nodes, [], game);
+    // Conso nominale 30 coal/min × dt 1 min → réserve 60 − 30 = 30.
+    const updates = nextGeneratorReserves(nodes, [], game, summary, 1);
+    expect(updates.get('gen')).toBe(30);
+  });
+
+  it('générateur nourri par convoyeur (≥ demande) → réserve inchangée', () => {
+    const nodes = [
+      machine('gen', { buildingId: 'coal-generator', recipeId: 'coal-generator-power', coalReserve: 60 }),
+      machine('coal-miner', { buildingId: 'miner-mk1', resourceId: 'coal', purity: 'normal' }),
+    ];
+    const edges: Edge[] = [
+      { id: 'cb', source: 'coal-miner', target: 'gen', sourceHandle: 'out-coal', targetHandle: 'in-coal' },
+      { id: 'p', source: 'gen', target: 'coal-miner', sourceHandle: 'power-out', targetHandle: 'power-in' },
+    ];
+    const summary = computeFactory(nodes, edges, game);
+    // 60 coal/min entrants ≥ 30 requis → pas de puisage dans la réserve.
+    expect(nextGeneratorReserves(nodes, edges, game, summary, 1).size).toBe(0);
+  });
+
+  it('la réserve ne descend jamais sous 0', () => {
+    const nodes = [
+      machine('gen', { buildingId: 'coal-generator', recipeId: 'coal-generator-power', coalReserve: 10 }),
+    ];
+    const summary = computeFactory(nodes, [], game);
+    expect(nextGeneratorReserves(nodes, [], game, summary, 100).get('gen')).toBe(0);
+  });
+
+  it('dt ≤ 0 (horloge figée) → aucune mise à jour', () => {
+    const nodes = [
+      machine('gen', { buildingId: 'coal-generator', recipeId: 'coal-generator-power', coalReserve: 60 }),
+    ];
+    const summary = computeFactory(nodes, [], game);
+    expect(nextGeneratorReserves(nodes, [], game, summary, 0).size).toBe(0);
   });
 });

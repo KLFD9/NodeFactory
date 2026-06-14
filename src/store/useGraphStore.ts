@@ -13,7 +13,8 @@ import {
 } from '@xyflow/react';
 import type { GameData, Purity } from '@/data/types';
 import { reconcileEdgesForNode } from '@/graph/connection';
-import { BUILDING_COSTS, machineUpgradeCost } from '@/game/balance';
+import { generatorFuelRequirement } from '@/graph/power';
+import { BUILDING_COSTS, STARTING_COAL_RESERVE, machineUpgradeCost } from '@/game/balance';
 import { MACHINE_UPGRADE_MAX_LEVEL } from '@/graph/nodeInfo';
 import { useProgressionStore } from '@/store/useProgressionStore';
 import { useFactoryStore } from '@/store/useFactoryStore';
@@ -41,6 +42,14 @@ export interface MachineNodeData extends Record<string, unknown> {
   rotation?: number;
   /** Niveau d'amélioration de CETTE machine (0 = base, cap MACHINE_UPGRADE_MAX_LEVEL). */
   upgradeLevel?: number;
+  /**
+   * Générateurs à combustible : réserve de charbon « dans la trémie » au démarrage
+   * (STARTING_COAL_RESERVE). Rend le générateur alimenté dès la pose — il produit du
+   * courant même avant que le convoyeur de charbon ne soit branché — puis se draine
+   * réellement tant qu'il manque de combustible (cf. nextGeneratorReserves). Une fois
+   * vide, « pas de charbon, pas de courant » reprend. Pas de recharge automatique.
+   */
+  coalReserve?: number;
 }
 
 export type MachineNode = Node<MachineNodeData, 'machine'>;
@@ -70,6 +79,9 @@ function initialNodeData(buildingId: string, category: string): MachineNodeData 
   if (game) {
     const std = game.recipes.filter((r) => r.producedIn === buildingId && !r.alternate);
     if (std.length === 1) data.recipeId = std[0].id;
+    // Générateur à combustible : réserve de charbon de démarrage (pas pour les poteaux,
+    // qui sont aussi `power` mais ne consomment rien → generatorFuelRequirement null).
+    if (generatorFuelRequirement(buildingId, game)) data.coalReserve = STARTING_COAL_RESERVE;
   }
   return data;
 }
@@ -108,6 +120,12 @@ interface GraphState {
    * changement des ports `in-<item>`/`out-<item>` (voir `reconcileEdgesForNode`).
    */
   updateNodeData: (id: string, patch: Partial<MachineNodeData>, gameData?: GameData) => void;
+  /**
+   * Met à jour la réserve de charbon de plusieurs générateurs en une passe (drain par le
+   * tick de jeu). N'écrit que si la map est non vide — pas de churn de persistance quand
+   * aucune réserve ne bouge (cas normal : générateurs nourris ou réserves épuisées).
+   */
+  applyCoalReserves: (updates: Map<string, number>) => void;
   /** Supprime un node et ses arêtes connectées. */
   deleteNode: (id: string) => void;
   selectNode: (id: string | null) => void;
@@ -354,6 +372,16 @@ export const useGraphStore = create<GraphState>()(
       const nodes = state.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...patch } } : n));
       const edges = gameData ? reconcileEdgesForNode(id, nodes, state.edges, gameData) : state.edges;
       return { nodes, edges };
+    }),
+
+  applyCoalReserves: (updates) =>
+    set((state) => {
+      if (updates.size === 0) return {};
+      return {
+        nodes: state.nodes.map((n) =>
+          updates.has(n.id) ? { ...n, data: { ...n.data, coalReserve: updates.get(n.id) } } : n,
+        ),
+      };
     }),
 
   deleteNode: (id) =>

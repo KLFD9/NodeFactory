@@ -79,6 +79,7 @@ export function TutorialPanel() {
       smelterFed: fedSmelters.length > 0,
       chainPowered: fedSmelters.some((id) => poweredByNode.get(id) === true),
       m1Reached: reachedMilestones.includes('ms-iron-ingot-60'),
+      m2Reached: reachedMilestones.includes('ms-iron-rod-60'),
     };
     return currentTutorialStep(snapshot);
   }, [gameData, nodes, edges, reachedMilestones]);
