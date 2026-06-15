@@ -26,92 +26,70 @@ function beltFlowDuration(rate: number): number {
 /** Rendu graphique unique pour chaque minerai et lingot. */
 function renderItemGraphic(itemId: string) {
   switch (itemId) {
-    case 'iron-ingot':
+    case 'iron-ingot': // Processed text token
       return (
         <g>
-          {/* Top face */}
-          <polygon points="-5,-2.5 0,-5 5,-2.5 0,0" fill="#e4e4e7" stroke="#a1a1aa" strokeWidth="0.5" />
-          {/* Left face */}
-          <polygon points="-5,-2.5 0,0 0,5 -5,2.5" fill="#a1a1aa" stroke="#71717a" strokeWidth="0.5" />
-          {/* Right face */}
-          <polygon points="0,0 5,-2.5 5,2.5 0,5" fill="#71717a" stroke="#52525b" strokeWidth="0.5" />
+          <circle cx="0" cy="0" r="5" fill="rgba(16, 185, 129, 0.35)" filter="blur(1px)" />
+          <rect x="-3" y="-3" width="6" height="6" rx="1" fill="#059669" stroke="#34d399" strokeWidth="0.5" />
+          <line x1="-3" y1="0" x2="3" y2="0" stroke="#a7f3d0" strokeWidth="0.5" opacity="0.6" />
         </g>
       );
-    case 'copper-ingot':
+    case 'copper-ingot': // Refined metadata block
       return (
         <g>
-          {/* Top face */}
-          <polygon points="-5,-2.5 0,-5 5,-2.5 0,0" fill="#fdba74" stroke="#f97316" strokeWidth="0.5" />
-          {/* Left face */}
-          <polygon points="-5,-2.5 0,0 0,5 -5,2.5" fill="#ea580c" stroke="#c2410c" strokeWidth="0.5" />
-          {/* Right face */}
-          <polygon points="0,0 5,-2.5 5,2.5 0,5" fill="#c2410c" stroke="#9a3412" strokeWidth="0.5" />
+          <circle cx="0" cy="0" r="5" fill="rgba(249, 115, 22, 0.35)" filter="blur(1px)" />
+          <rect x="-3.5" y="-3" width="7" height="6" rx="1" fill="#ea580c" stroke="#fb923c" strokeWidth="0.5" />
+          <rect x="-1" y="-2" width="2" height="1.5" fill="#cbd5e1" />
         </g>
       );
-    case 'steel':
+    case 'steel': // Trained AI model weights
       return (
         <g>
-          {/* Top face */}
-          <polygon points="-5,-2.5 0,-5 5,-2.5 0,0" fill="#cbd5e1" stroke="#64748b" strokeWidth="0.5" />
-          {/* Left face */}
-          <polygon points="-5,-2.5 0,0 0,5 -5,2.5" fill="#64748b" stroke="#475569" strokeWidth="0.5" />
-          {/* Right face */}
-          <polygon points="0,0 5,-2.5 5,2.5 0,5" fill="#475569" stroke="#334155" strokeWidth="0.5" />
+          <circle cx="0" cy="0" r="6" fill="rgba(8, 145, 178, 0.35)" filter="blur(1px)" />
+          <rect x="-4" y="-3.5" width="8" height="7" rx="1.5" fill="#0891b2" stroke="#22d3ee" strokeWidth="0.5" />
+          <circle cx="-1.5" cy="0" r="0.8" fill="#a5f3fc" />
+          <circle cx="1.5" cy="0" r="0.8" fill="#a5f3fc" />
         </g>
       );
-    case 'iron-ore':
+    case 'iron-ore': // Raw binary 0
       return (
         <g>
-          <ellipse cx="0" cy="2" rx="4.5" ry="1.8" fill="rgba(0,0,0,0.5)" />
-          <polygon points="-3.5,-1.5 0,-4.5 3.5,-2.5 4.5,1.5 1,3.5 -2.5,2.5" fill="#3f3f46" />
-          <polygon points="-3.5,-1.5 0,-4.5 1,1 -2.5,2.5" fill="#52525b" />
-          <polygon points="0,-4.5 3.5,-2.5 2.5,0 1,1" fill="#78350f" />
-          <polygon points="1,1 2.5,0 4.5,1.5 1,3.5" fill="#9a3412" />
+          <circle cx="0" cy="0" r="4.5" fill="rgba(16, 185, 129, 0.35)" filter="blur(1px)" />
+          <polygon points="-4,0 0,-4 4,0 0,4" fill="#10b981" stroke="#34d399" strokeWidth="0.5" />
+          <text x="0" y="1.8" fill="#ffffff" fontSize="4.5" fontFamily="monospace" textAnchor="middle" fontWeight="bold">0</text>
         </g>
       );
-    case 'copper-ore':
+    case 'copper-ore': // Raw binary 1
       return (
         <g>
-          <ellipse cx="0" cy="2" rx="4.5" ry="1.8" fill="rgba(0,0,0,0.5)" />
-          <polygon points="-3.5,-2.5 -1,-4.5 2.5,-3.5 4.5,1 2,3.5 -2,2.5" fill="#047857" />
-          <polygon points="-3.5,-2.5 -1,-4.5 0,1 -2,2.5" fill="#065f46" />
-          <polygon points="-1,-4.5 2.5,-3.5 1.5,0 0,1" fill="#ea580c" />
-          <polygon points="0,1 1.5,0 4.5,1 2,3.5" fill="#fb923c" />
+          <circle cx="0" cy="0" r="4.5" fill="rgba(249, 115, 22, 0.35)" filter="blur(1px)" />
+          <polygon points="-4,0 0,-4 4,0 0,4" fill="#f97316" stroke="#fdba74" strokeWidth="0.5" />
+          <text x="0" y="1.8" fill="#ffffff" fontSize="4.5" fontFamily="monospace" textAnchor="middle" fontWeight="bold">1</text>
         </g>
       );
-    case 'limestone':
+    case 'limestone': // Raw Token index node
       return (
         <g>
-          <ellipse cx="0" cy="2" rx="4.5" ry="1.8" fill="rgba(0,0,0,0.5)" />
-          <polygon points="-3.5,-1.5 0,-4.5 3.5,-2.5 4.5,1 1.8,3.5 -1.8,2.5" fill="#e4e4e7" />
-          <polygon points="-3.5,-1.5 0,-4.5 1,1 -1.8,2.5" fill="#d4d4d8" />
-          <polygon points="0,-4.5 3.5,-2.5 2.5,0 1,1" fill="#fafafa" />
-          <polygon points="1,1 2.5,0 4.5,1 1.8,3.5" fill="#a1a1aa" />
+          <circle cx="0" cy="0" r="4.5" fill="rgba(56, 189, 248, 0.35)" filter="blur(1px)" />
+          <polygon points="-4.5,-2 0,-4 4.5,-2 4.5,2 0,4 -4.5,2" fill="#0284c7" stroke="#38bdf8" strokeWidth="0.5" />
+          <text x="0" y="2" fill="#ffffff" fontSize="5.5" fontFamily="monospace" textAnchor="middle" fontWeight="bold">T</text>
         </g>
       );
-    case 'coal':
+    case 'coal': // Raw electrical packet (lightning bolt)
       return (
         <g>
-          <ellipse cx="0" cy="2" rx="4.5" ry="1.8" fill="rgba(0,0,0,0.5)" />
-          <polygon points="-3.5,-2.5 -1,-4.5 2.5,-3.5 4.5,1 2,3.5 -2,2.5" fill="#18181b" />
-          <polygon points="-3.5,-2.5 -1,-4.5 0,1 -2,2.5" fill="#09090b" />
-          <polygon points="-1,-4.5 2.5,-3.5 1.5,0 0,1" fill="#27272a" />
-          <polygon points="0,1 1.5,0 4.5,1 2,3.5" fill="#52525b" />
+          <circle cx="0" cy="0" r="4.5" fill="rgba(234, 179, 8, 0.4)" filter="blur(1px)" />
+          <polygon points="-4,0 0,-4 4,0 0,4" fill="#ca8a04" stroke="#fef08a" strokeWidth="0.5" />
+          <path d="M -0.5,-2 L 1.5,-2 L 0,0 L 1.5,0 L -1.5,2.5 L -0.5,0.5 L -1.5,0.5 Z" fill="#ffffff" />
         </g>
       );
     default:
-      // Crate
+      // General data packet
       return (
         <g>
-          {/* Top face */}
-          <polygon points="-4.5,-2.2 0,-4.5 4.5,-2.2 0,0" fill="#d97706" stroke="#92400e" strokeWidth="0.5" />
-          {/* Left face */}
-          <polygon points="-4.5,-2.2 0,0 0,4.5 -4.5,2.2" fill="#b45309" stroke="#78350f" strokeWidth="0.5" />
-          {/* Right face */}
-          <polygon points="0,0 4.5,-2.2 4.5,2.2 0,4.5" fill="#78350f" stroke="#451a03" strokeWidth="0.5" />
-          {/* Straps */}
-          <line x1="0" y1="-4.5" x2="0" y2="4.5" stroke="#18181b" strokeWidth="0.5" opacity="0.6" />
-          <line x1="-4.5" y1="0" x2="4.5" y2="0" stroke="#18181b" strokeWidth="0.5" opacity="0.6" />
+          <circle cx="0" cy="0" r="4.5" fill="rgba(168, 85, 247, 0.35)" filter="blur(1px)" />
+          <polygon points="-4,0 0,-4 4,0 0,4" fill="#a855f7" stroke="#c084fc" strokeWidth="0.5" />
+          <circle cx="0" cy="0" r="1.5" fill="#ffffff" />
         </g>
       );
   }
