@@ -186,8 +186,8 @@ export interface MinerBinding {
 }
 
 /** Demi-dimensions approximatives d'une carte mineur, pour centrer la pose sur le pin. */
-const MINER_HALF_W = 110;
-const MINER_HALF_H = 40;
+const MINER_HALF_W = 220;
+const MINER_HALF_H = 90;
 
 /** Demi-taille du node poteau électrique (h-14 w-14 = 56px), pour le centrer sous le curseur. */
 const POLE_HALF = 28;

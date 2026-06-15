@@ -10,57 +10,58 @@ import { machineUpgradeCost } from '@/game/balance';
 import { useProgressionStore } from '@/store/useProgressionStore';
 import { computeMachineStatus, type MachineState } from '@/graph/machineStatus';
 import { ExtractionIcon, SmeltingIcon, ManufacturingIcon, LogisticsIcon, PowerIcon } from '@/ui/icons';
-import { CoalGeneratorIllustration } from '@/ui/nodes/illustrations/CoalGeneratorIllustration';
+import { DatacenterIllustration } from '@/ui/nodes/illustrations/DatacenterIllustration';
+import { HarvesterIllustration } from '@/ui/nodes/illustrations/HarvesterIllustration';
 import { ItemIcon } from '@/ui/assets';
 import { NodeFlowContext, PowerContext, PowerConnectionsContext, PowerNetworkContext, ActivePowerNodesContext, AnyPowerNetworkActiveContext } from '@/ui/NodeFlowContext';
 
 /**
- * Silhouettes personnalisées :
- * - extraction : coins asymétriques lourds, bordure orange/ambre latérale
- * - smelting : toit en dôme (haut biseauté) pour canaliser le flux de chaleur
- * - manufacturing : biseauté cyber-punk
- * - power : monolithe élancé et angulaire
- * - logistics : losange parfait en rotation interne
+ * Silhouettes personnalisées (Scrappy AI Lab) :
+ * - extraction (crawler) : coins asymétriques lourds, bordure verte terminal
+ * - smelting (tokenizer) : dôme biseauté pour le lavage/centrifugation
+ * - manufacturing (training) : biseauté cyber-punk
+ * - power (datacenter) : monolithe élancé et angulaire violet
+ * - logistics (network interconnect) : losange parfait en rotation interne
  */
 const CATEGORY_SILHOUETTE: Record<string, string> = {
-  extraction: 'rounded-tr-[2rem] rounded-bl-[2rem] rounded-tl-lg rounded-br-lg border-l-4 border-l-amber-500 border-zinc-800/80',
+  extraction: 'rounded-tr-[2rem] rounded-bl-[2rem] rounded-tl-lg rounded-br-lg border-l-4 border-l-green-500 border-zinc-800/80',
   smelting: 'rounded-t-[2.2rem] rounded-b-lg border-t-4 border-t-orange-500 border-zinc-800/80',
   manufacturing: 'rounded-tl-[2rem] rounded-br-[2rem] rounded-tr-lg rounded-bl-lg border-l-4 border-l-sky-500 border-zinc-800/80',
-  power: 'rounded-xl border-t-4 border-t-emerald-500 border-zinc-800/80',
+  power: 'rounded-xl border-t-4 border-t-purple-500 border-zinc-800/80',
 };
 
 /** Couleur hex par catégorie. */
 const CATEGORY_COLOR: Record<string, string> = {
-  extraction:    '#f59e0b', // amber-500
-  smelting:      '#f97316', // orange-500
-  manufacturing: '#38bdf8', // sky-400
-  logistics:     '#71717a', // zinc-500
-  power:         '#10b981', // emerald-500
+  extraction:    '#22c55e', // green-500 (crawler terminal)
+  smelting:      '#f97316', // orange-500 (cleaner)
+  manufacturing: '#38bdf8', // sky-400 (training units)
+  logistics:     '#71717a', // zinc-500 (interconnect)
+  power:         '#a855f7', // purple-500 (compute datacenter)
 };
 
 /** Couleurs de glow par catégorie. */
 const CATEGORY_GLOW: Record<string, string> = {
-  extraction:    'rgba(245, 158, 11, 0.25)',
+  extraction:    'rgba(34, 197, 94, 0.25)',
   smelting:      'rgba(249, 115, 22, 0.25)',
   manufacturing: 'rgba(56, 189, 248, 0.25)',
   logistics:     'rgba(113, 113, 122, 0.25)',
-  power:         'rgba(16, 185, 129, 0.25)',
+  power:         'rgba(168, 85, 247, 0.25)',
 };
 
 const CATEGORY_GLOW_SOFT: Record<string, string> = {
-  extraction:    'rgba(245, 158, 11, 0.08)',
+  extraction:    'rgba(34, 197, 94, 0.08)',
   smelting:      'rgba(249, 117, 22, 0.08)',
   manufacturing: 'rgba(56, 189, 248, 0.08)',
   logistics:     'rgba(113, 113, 122, 0.08)',
-  power:         'rgba(16, 185, 129, 0.08)',
+  power:         'rgba(168, 85, 247, 0.08)',
 };
 
 /** Styles du badge d'état. */
 const STATE_STYLE: Record<MachineState, { color: string; label: string }> = {
-  nominal: { color: '#10b981', label: 'Nominal' },
-  starved: { color: '#f59e0b', label: 'Sous-alim.' },
-  blocked: { color: '#ef4444', label: 'En attente' },
-  unpowered: { color: '#ef4444', label: 'Non alimenté' },
+  nominal: { color: '#10b981', label: 'RUNNING' },
+  starved: { color: '#f59e0b', label: 'THROTTLED' },
+  blocked: { color: '#ef4444', label: 'BLOCKED' },
+  unpowered: { color: '#64748b', label: 'OFFLINE' },
 };
 
 /** Pins « énergie » : ambre, distincts des handles convoyeur (orange/vert). */
@@ -140,10 +141,11 @@ function CycleBar({ seconds, color }: { seconds: number; color: string }) {
 }
 
 const CATEGORY_CHIP: Record<string, string> = {
-  extraction: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
+  extraction: 'bg-green-500/10 text-green-400 border border-green-500/20',
   smelting: 'bg-orange-500/10 text-orange-400 border border-orange-500/20',
   manufacturing: 'bg-sky-500/10 text-sky-400 border border-sky-500/20',
   logistics: 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20',
+  power: 'bg-purple-500/10 text-purple-400 border border-purple-500/20',
 };
 
 const CATEGORY_ICON = {
@@ -767,7 +769,7 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
     : 1.0;
   const handleOpacity = anyPowerNetworkActive ? (activePowerNodes.has(id) ? 1.0 : 0.15) : 1.0;
 
-  // ── Custom layout for Coal Generators ──
+  // ── Custom layout for Datacenters ──
   if (building?.id === 'coal-generator') {
     const perItem = info.configured;
     const isNominal = machineState === 'nominal';
@@ -788,9 +790,9 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
     const handleOpacity = anyPowerNetworkActive ? (activePowerNodes.has(id) ? 1.0 : 0.15) : 1.0;
 
     const styleVariables = {
-      '--category-color': '#10b981',
-      '--category-glow': isNodeActive ? 'rgba(16, 185, 129, 0.55)' : 'rgba(16, 185, 129, 0.25)',
-      '--category-glow-soft': 'rgba(16, 185, 129, 0.08)',
+      '--category-color': '#a855f7',
+      '--category-glow': isNodeActive ? 'rgba(168, 85, 247, 0.55)' : 'rgba(168, 85, 247, 0.25)',
+      '--category-glow-soft': 'rgba(168, 85, 247, 0.08)',
       opacity: cardOpacity,
     } as React.CSSProperties;
 
@@ -798,18 +800,10 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
     const demand = net?.totalDemandMW ?? 0;
     const capacity = net?.totalGenMW ?? info.powerMW;
 
-    // Vitesse de rotation des turbines selon l'état machine
-    let turbineSpeedVar = '0s';
-    if (isNominal && powered) {
-      turbineSpeedVar = '1.2s';
-    } else if (machineState === 'starved' && powered) {
-      turbineSpeedVar = '4s';
-    }
-
     const loadRatio = capacity > 0 ? Math.min(demand / capacity, 1) : 0;
     const loadPercent = Math.round(loadRatio * 100);
 
-    // Combustible (premier intrant non-énergie, typiquement le charbon)
+    // Grid Power input (formerly Coal)
     const coalInput = info.inputs[0];
     const actualCoalRate = coalInput ? actualFlow?.inputs.get(coalInput.itemId) : undefined;
     const coalConsumed = coalInput?.ratePerMin ?? 0;
@@ -818,133 +812,140 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
     return (
       <div
         style={styleVariables}
-        className={[
-          'relative h-[156px] w-[280px] text-xs shadow-2xl transition-all duration-300 nf-generator-node flex flex-col overflow-visible',
-          selected ? 'nf-node-selected-glow scale-[1.01]' : '',
-        ].join(' ')}
+        className="relative h-[340px] w-[220px] text-xs overflow-visible"
       >
-        <NodeActions id={id} data={data} />
+        <div
+          className={[
+            'absolute inset-0 shadow-2xl transition-all duration-300 nf-datacenter-node flex flex-col overflow-hidden',
+            selected ? 'nf-node-selected-glow scale-[1.01]' : '',
+          ].join(' ')}
+        >
+          <NodeActions id={id} data={data} />
 
-        {/* Illustration vectorielle 2.5D (prototype, vue du dessus) */}
-        <div className="absolute inset-0 rounded-[10px] pointer-events-none">
-          <CoalGeneratorIllustration state={machineState ?? 'unpowered'} powered={powered} turbineSpeed={turbineSpeedVar} />
-        </div>
+          {/* 2.5D Isometric Datacenter server rack illustration - fills the background */}
+          <div className="absolute inset-0 rounded-[10px] pointer-events-none z-0">
+            <DatacenterIllustration state={machineState ?? 'unpowered'} powered={powered} />
+          </div>
 
-        {/* 1. HUD : en-tête (nom + statut) */}
-        <div className="relative z-10 flex items-start justify-between gap-2 p-2">
-          <div className="flex flex-col gap-0.5 bg-zinc-950/80 backdrop-blur-sm rounded-md px-2 py-1 border border-zinc-800/60 shadow-[0_2px_6px_rgba(0,0,0,0.5)]">
-            <div className="flex items-center gap-1.5">
-              <PowerIcon className="h-3 w-3 text-emerald-400" />
-              <span className="font-extrabold tracking-tight text-emerald-400 text-[10px] uppercase font-mono leading-none">
-                {building?.name === 'Coal Generator' ? 'Générateur Charbon' : (building?.name ?? 'Coal Generator')}
-              </span>
+          {/* Neon Purple Side Accent Highlight Bars (matching the Harvester green sides) */}
+          <div className="absolute left-0 top-[12px] bottom-[12px] w-[2px] bg-purple-500/80 shadow-[0_0_8px_#a855f7] z-20 pointer-events-none" />
+          <div className="absolute right-0 top-[12px] bottom-[12px] w-[2px] bg-purple-500/80 shadow-[0_0_8px_#a855f7] z-20 pointer-events-none" />
+
+          {/* 1. HUD : Header (Name + Status) */}
+          <div className="relative z-10 flex flex-col gap-1 p-2.5">
+            <div className="flex items-center justify-between bg-zinc-950/80 backdrop-blur-sm rounded-md px-2 py-1 border border-zinc-800/60 shadow-[0_2px_6px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center gap-1.5">
+                <PowerIcon className="h-3 w-3 text-purple-400" />
+                <span className="font-extrabold tracking-tight text-purple-400 text-[10px] uppercase font-mono leading-none">
+                  Datacenter AI
+                </span>
+              </div>
+              {(() => {
+                const stateKey = machineState || 'unpowered';
+                return (
+                  <span className="nf-power-switch flex h-4 w-4 shrink-0 items-center justify-center rounded-full">
+                    <span
+                      className="h-1.5 w-1.5 shrink-0 rounded-full relative z-10 nf-diode-glow"
+                      style={{
+                        '--state-color': STATE_STYLE[stateKey].color,
+                        background: STATE_STYLE[stateKey].color,
+                        boxShadow: `0 0 5px ${STATE_STYLE[stateKey].color}`,
+                      } as React.CSSProperties}
+                    />
+                  </span>
+                );
+              })()}
             </div>
-            <span className="text-[7px] font-mono text-emerald-400/50 uppercase tracking-widest select-none leading-none">
-              {isNominal && powered ? 'SYS_OK · PRES: 8.5 BAR' : machineState === 'starved' ? 'ERR_FUEL · PRES: 0.2 BAR' : !powered ? 'ERR_POWER · STANDBY' : 'ERR_BLOCKED · OVERPRESSURE'}
+            <span className="text-[6.5px] font-mono text-purple-400 bg-zinc-950/80 backdrop-blur-sm px-1.5 py-0.5 rounded border border-zinc-850/60 uppercase tracking-widest text-center select-none leading-none shadow-[0_2px_4px_rgba(0,0,0,0.4)]">
+              {isNominal && powered ? 'SYS_OK · TEMP: 38°C' : machineState === 'starved' ? 'ERR_POWER · TEMP: 18°C' : !powered ? 'ERR_OFFLINE · STANDBY' : 'ERR_THROTTLED · COOLANT'}
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <span className="nf-power-switch rounded-md px-1.5 py-0.5 text-[8.5px] font-extrabold text-zinc-400 flex items-center font-mono">
-              <span className="text-emerald-450 drop-shadow-[0_0_2px_rgba(16,185,129,0.5)]">
-                {rotation === 0 && '▶'}
-                {rotation === 90 && '▼'}
-                {rotation === 180 && '◀'}
-                {rotation === 270 && '▲'}
-              </span>
-            </span>
-
-            {(() => {
-              const stateKey = machineState || 'unpowered';
-              return (
-                <span className="nf-power-switch flex h-5 w-5 shrink-0 items-center justify-center rounded-full">
-                  <span
-                    className="h-2 w-2 shrink-0 rounded-full relative z-10 nf-diode-glow"
-                    style={{
-                      '--state-color': STATE_STYLE[stateKey].color,
-                      background: STATE_STYLE[stateKey].color,
-                      animation:
-                        stateKey === 'nominal' ? undefined : 'nf-activity-dot 1s ease-in-out infinite',
-                    } as React.CSSProperties}
-                  />
-                </span>
-              );
-            })()}
-          </div>
-        </div>
-
-        {/* 2. HUD : badges de télémétrie superposés à l'illustration */}
-        <div className="relative z-10 flex-1 flex items-end justify-between px-2 pb-2 gap-1">
-          {/* Trémie : débit de charbon */}
-          <div className="flex flex-col items-center gap-0.5 bg-zinc-950/80 backdrop-blur-sm rounded-md px-1.5 py-1 border border-zinc-800/60 shadow-[0_2px_6px_rgba(0,0,0,0.5)]">
-            {coalConsumed > 0 ? (
-              coalStarved ? (
-                <span className="font-mono flex items-baseline gap-0.5 text-[9px] font-bold">
-                  <span className="font-extrabold text-amber-450 animate-pulse">{round(actualCoalRate!)}</span>
-                  <span className="text-[7px] text-zinc-500">/{round(coalConsumed)}</span>
-                </span>
-              ) : (
-                <span className="text-[9px] text-orange-400 font-mono font-bold">{round(coalConsumed)}/m</span>
-              )
-            ) : (
-              <span className="text-[8px] text-zinc-500 font-mono uppercase">Sans combustible</span>
-            )}
-            <span className="text-[6px] text-zinc-500 uppercase tracking-widest font-mono leading-none">Charbon</span>
-          </div>
-
-          {/* Turbines : état de combustion + cycle */}
-          <div className="flex flex-col items-center gap-1 bg-zinc-950/80 backdrop-blur-sm rounded-md px-2 py-1 border border-zinc-800/60 shadow-[0_2px_6px_rgba(0,0,0,0.5)]">
-            <span className="text-[7px] font-mono text-orange-500/85 font-bold select-none tracking-tighter">
-              {isNominal && powered ? 'FEU_ACTIF' : 'ARRETE'}
-            </span>
-            {cycleTime > 0 ? (
-              <div className="w-[64px] h-1.5 relative rounded bg-zinc-950/90 border border-zinc-800/80 overflow-hidden shadow-inner">
+          {/* 2. HUD : Telemetry readouts stacked vertically over illustration */}
+          <div className="relative z-10 flex-1 flex flex-col gap-2.5 px-2.5 justify-center pb-2">
+            
+            {/* Compute output block */}
+            <div className="flex flex-col gap-1 bg-zinc-950/80 backdrop-blur-sm rounded-md p-2 border border-zinc-800/60 shadow-[0_2px_6px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center justify-between font-bold text-purple-400">
+                <div className="flex items-center gap-1">
+                  <PowerIcon className="h-2.5 w-2.5 animate-pulse" />
+                  <span className="text-[9px] font-mono font-extrabold">{info.powerMW} FLOPs</span>
+                </div>
+                <span className="text-[7.5px] font-mono text-zinc-400 font-bold bg-purple-500/10 px-1 rounded border border-purple-500/20">GRID SYS</span>
+              </div>
+              
+              <div className="w-full h-1 bg-zinc-950 border border-zinc-850 rounded-sm overflow-hidden relative my-0.5">
                 <div
-                  className="absolute inset-y-0 left-0 rounded-l nf-ember-bar"
+                  className="h-full transition-all duration-500"
                   style={{
-                    width: '100%',
-                    boxShadow: '0 0 6px 1px rgba(249, 115, 22, 0.6)',
-                    transformOrigin: 'left center',
-                    animation: `nf-cycle ${cycleTime}s linear infinite`,
-                  } as React.CSSProperties}
+                    width: `${loadPercent}%`,
+                    background: loadRatio > 0.85 ? 'linear-gradient(90deg, #ef4444, #f97316)' : 'linear-gradient(90deg, #a855f7, #c084fc)'
+                  }}
                 />
               </div>
-            ) : (
-              <span className="text-[7px] font-extrabold uppercase text-zinc-550 tracking-wider select-none font-mono">En veille</span>
-            )}
-          </div>
 
-          {/* Bloc de raccordement : sortie électrique */}
-          <div className="flex flex-col gap-1 bg-zinc-950/80 backdrop-blur-sm rounded-md px-1.5 py-1 border border-zinc-800/60 shadow-[0_2px_6px_rgba(0,0,0,0.5)] min-w-[68px]">
-            <div className="flex items-center gap-1 font-bold text-emerald-400">
-              <PowerIcon className="h-2.5 w-2.5" />
-              <span className="text-[10px] font-mono font-extrabold">{info.powerMW} MW</span>
+              <div className="text-[7px] font-mono text-zinc-400 flex justify-between tracking-tight leading-none mt-0.5">
+                <span>LOAD_FACTOR:</span>
+                <span className="font-extrabold text-zinc-200">{round(demand)}/{round(capacity)} FL</span>
+              </div>
             </div>
-            <div className="text-[6.5px] font-mono text-zinc-400 tracking-tight flex flex-col gap-0.5">
-              <span>CHARGE RESEAU:</span>
-              <span className="font-extrabold text-zinc-200">{round(demand)}/{round(capacity)} MW</span>
+
+            {/* Grid Power Input */}
+            <div className="flex items-center justify-between bg-zinc-950/80 backdrop-blur-sm rounded-md p-2 border border-zinc-800/60 shadow-[0_2px_6px_rgba(0,0,0,0.5)]">
+              <div className="flex flex-col">
+                <span className="text-[6px] text-zinc-500 uppercase tracking-widest font-mono leading-none">Stream In</span>
+                <span className="text-[8.5px] text-purple-300 font-bold font-mono uppercase mt-0.5">Grid Power</span>
+              </div>
+              <div className="flex flex-col items-end">
+                {coalConsumed > 0 ? (
+                  coalStarved ? (
+                    <span className="font-mono flex items-baseline gap-0.5 text-[9px] font-bold">
+                      <span className="font-extrabold text-amber-450 animate-pulse">{round(actualCoalRate!)}</span>
+                      <span className="text-[7px] text-zinc-500">/{round(coalConsumed)}</span>
+                    </span>
+                  ) : (
+                    <span className="text-[9.5px] text-purple-400 font-mono font-bold bg-purple-500/5 px-1.5 py-0.5 rounded border border-purple-500/10">{round(coalConsumed)}/m</span>
+                  )
+                ) : (
+                  <span className="text-[8.5px] text-zinc-500 font-mono uppercase">Offline</span>
+                )}
+              </div>
             </div>
-            <div className="w-full h-1 bg-zinc-950 border border-zinc-800/80 rounded-sm overflow-hidden relative">
-              <div
-                className="h-full transition-all duration-500"
-                style={{
-                  width: `${loadPercent}%`,
-                  background: loadRatio > 0.85 ? 'linear-gradient(90deg, #ef4444, #f97316)' : 'linear-gradient(90deg, #10b981, #34d399)'
-                }}
-              />
+
+            {/* Core operation + progress */}
+            <div className="flex items-center justify-between bg-zinc-950/80 backdrop-blur-sm rounded-md p-2 border border-zinc-800/60 shadow-[0_2px_6px_rgba(0,0,0,0.5)]">
+              <span className="text-[7.5px] font-mono text-purple-400 font-extrabold select-none tracking-wider">
+                {isNominal && powered ? 'CORE_ACTIVE' : 'CORE_STANDBY'}
+              </span>
+              {cycleTime > 0 ? (
+                <div className="w-[56px] h-1.5 relative rounded bg-zinc-950/90 border border-zinc-800/80 overflow-hidden shadow-inner">
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-l"
+                    style={{
+                      width: '100%',
+                      background: 'linear-gradient(90deg, #6366f1, #a855f7 80%, #d8b4fe 100%)',
+                      boxShadow: '0 0 6px 1px rgba(168, 85, 247, 0.6)',
+                      transformOrigin: 'left center',
+                      animation: `nf-cycle ${cycleTime}s linear infinite`,
+                    } as React.CSSProperties}
+                  />
+                </div>
+              ) : (
+                <span className="text-[7px] font-extrabold uppercase text-zinc-500 tracking-wider font-mono">OFFLINE</span>
+              )}
             </div>
           </div>
         </div>
 
-        {/* 3. CONNECTION HANDLES */}
+        {/* 3. CONNECTION HANDLES (Left conveyor input, Right power output) */}
         <Handle
           key="power-out"
           id="power-out"
           type="source"
-          position={getRotatedPosition(Position.Bottom, rotation)}
+          position={getRotatedPosition(Position.Right, rotation)}
           title="Sortie d'énergie"
           style={{
-            ...getHandleStyle(getRotatedPosition(Position.Bottom, rotation), 'rgba(245, 158, 11, 0.6)'),
+            ...getHandleStyle(getRotatedPosition(Position.Right, rotation), 'rgba(168, 85, 247, 0.6)'),
             opacity: handleOpacity,
             transition: 'opacity 0.22s ease-in-out',
           }}
@@ -962,6 +963,193 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
               style={getMultiHandleStyle(rotPos, i, inPorts.length, 'rgba(249, 115, 22, 0.6)')}
               title={p.title}
               className={HANDLE_IN}
+            />
+          );
+        })}
+      </div>
+    );
+  }
+
+  // ── Custom layout for Data Harvesters ──
+  if (building?.category === 'extraction') {
+    const perItem = info.configured;
+    const isNominal = machineState === 'nominal';
+    const isStarved = machineState === 'starved';
+    const active = powered && isNominal;
+    const isEnergyItem = (itemId: string) => gameData.items.find((i) => i.id === itemId)?.category === 'energy';
+
+    const outPorts: PortDef[] = perItem
+      ? info.outputs
+          .filter((p) => !isEnergyItem(p.itemId))
+          .map((p) => ({ id: `out-${p.itemId}`, title: `${p.itemName} · ${p.ratePerMin}/min` }))
+      : Array.from({ length: genericPorts(building, data, 'outputs') }, (_, i) => ({
+          id: `out-${i}`,
+        }));
+
+    const isNodeActive = anyPowerNetworkActive && activePowerNodes.has(id);
+    const cardOpacity = anyPowerNetworkActive
+      ? (activePowerNodes.has(id) ? 1.0 : 0.35)
+      : 1.0;
+    const handleOpacity = anyPowerNetworkActive ? (activePowerNodes.has(id) ? 1.0 : 0.15) : 1.0;
+
+    const styleVariables = {
+      '--category-color': '#22c55e',
+      '--category-glow': isNodeActive ? 'rgba(34, 197, 94, 0.55)' : 'rgba(34, 197, 94, 0.25)',
+      '--category-glow-soft': 'rgba(34, 197, 94, 0.08)',
+      opacity: cardOpacity,
+    } as React.CSSProperties;
+
+    // Signal ping speed based on machine state
+    let signalSpeedVar = '0s';
+    if (machineState === 'nominal') {
+      signalSpeedVar = '1.5s';
+    } else if (machineState === 'starved') {
+      signalSpeedVar = '4s';
+    }
+
+    return (
+      <div
+        style={styleVariables}
+        className="relative h-[180px] w-[440px] text-xs overflow-visible"
+      >
+        <div
+          className={[
+            'absolute inset-0 shadow-2xl transition-all duration-300 nf-harvester-node flex flex-col overflow-hidden',
+            selected ? 'nf-node-selected-glow scale-[1.01]' : '',
+          ].join(' ')}
+        >
+          <div ref={particleContainerRef} className="absolute inset-0 pointer-events-none overflow-visible z-30" />
+          
+          {/* Neon Green Side Accent Highlight Bars */}
+          <div className="absolute left-0 top-[12px] bottom-[12px] w-[2px] bg-green-500/80 shadow-[0_0_8px_#22c55e] z-20 pointer-events-none" />
+          <div className="absolute right-0 top-[12px] bottom-[12px] w-[2px] bg-green-500/80 shadow-[0_0_8px_#22c55e] z-20 pointer-events-none" />
+          
+          {selected && <HudBrackets color="#22c55e" />}
+          <NodeActions id={id} data={data} />
+
+          {/* Panoramic Illustration Background (CRT & Controls) */}
+          <div className="absolute inset-0 pointer-events-none z-0">
+            <HarvesterIllustration state={machineState ?? 'unpowered'} powered={powered} pulseSpeed={signalSpeedVar} />
+          </div>
+
+          {/* CRT GLASS SCREEN TERMINAL LAYER */}
+          <div className="absolute left-[22px] top-[22px] w-[286px] h-[136px] p-2.5 flex flex-col justify-between font-mono text-[#10b981] select-none pointer-events-none z-10">
+            {/* Cathodic Reflection & Scanlines Overlays */}
+            <div className="absolute inset-0 pointer-events-none bg-gradient-to-tr from-transparent via-white/5 to-white/10 rounded-lg z-20" />
+            <div className="absolute inset-0 pointer-events-none opacity-[0.18] rounded-lg z-20" style={{ backgroundImage: 'repeating-linear-gradient(0deg, #000 0px, #000 2px, transparent 2px, transparent 4px)' }} />
+
+            {/* Header row */}
+            <div className="flex items-center justify-between text-[7.5px] font-extrabold tracking-wider opacity-90 z-10">
+              <span>[SYS_OK // DATA_CRAWLER_V1]</span>
+              <div className="flex items-center gap-1">
+                <span className="w-1 h-1 rounded-full bg-green-500 animate-ping" />
+                <span>ONLINE</span>
+              </div>
+            </div>
+
+            {/* Telemetry info row */}
+            <div className="flex justify-between items-center my-auto z-10 w-full">
+              {/* Left Column: DB details */}
+              <div className="flex flex-col gap-0.5 text-[8px] opacity-85">
+                <div className="flex gap-2">
+                  <span className="text-[#10b981]/60">DB_SRC:</span>
+                  <span className="font-bold text-[#34d399]">{data.purity?.toUpperCase() || 'NORMAL'}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-[#10b981]/60">IP_ADR:</span>
+                  <span className="text-[#34d399]">192.168.0.{id.charCodeAt(0) % 255}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-[#10b981]/60">EST_CN:</span>
+                  <span className="text-[#34d399]">DB_POOL_ACTIVE</span>
+                </div>
+              </div>
+
+              {/* Right Column: Crawl Output */}
+              {info.configured && info.outputs.length > 0 ? (
+                <div className="flex flex-col items-center bg-zinc-950/70 border border-[#10b981]/25 rounded px-2 py-1 shadow-[0_0_8px_rgba(16,185,129,0.1)]">
+                  <span className="text-[6px] text-[#10b981]/50 font-black tracking-widest uppercase mb-0.5">// OUT</span>
+                  {info.outputs.map((output, idx) => {
+                    const actualRate = actualFlow?.outputs.get(output.itemId);
+                    const produced = output.ratePerMin;
+                    const connected = actualRate !== undefined;
+                    const backedUp = connected && actualRate < produced - 0.01;
+
+                    return (
+                      <div key={idx} className="flex items-center gap-1.5">
+                        <div className="flex h-4.5 w-4.5 items-center justify-center rounded bg-zinc-900 border border-[#10b981]/20">
+                          <ItemIcon itemId={output.itemId} size={11} />
+                        </div>
+                        {backedUp ? (
+                          <span className="font-mono text-[8px] font-black text-amber-500 tabular-nums leading-none">
+                            {round(actualRate)}
+                          </span>
+                        ) : (
+                          <span className="font-mono text-[8px] font-black text-[#34d399] tabular-nums leading-none">
+                            {round(produced)}
+                          </span>
+                        )}
+                        <span className="text-[6px] text-[#10b981]/50 font-semibold font-mono">/M</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <span className="text-[6.5px] text-zinc-550 font-mono tracking-widest uppercase">No Data</span>
+              )}
+            </div>
+
+            {/* Bottom row (Speed + Segmented Loader) */}
+            <div className="flex items-center justify-between gap-2 border-t border-[#10b981]/25 pt-1.5 z-10">
+              <span className="text-[7.5px] font-extrabold tracking-wider">
+                {active ? 'CRAWLING...' : isStarved ? 'THROTTLED' : 'STANDBY'}
+              </span>
+              
+              {cycleTime > 0 ? (
+                <div className="w-[100px] h-2 relative rounded bg-zinc-950/80 border border-zinc-900 overflow-hidden shadow-inner">
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-l nf-segmented-bar"
+                    style={{
+                      width: '100%',
+                      '--bar-color': '#10b981',
+                      transformOrigin: 'left center',
+                      animation: `nf-cycle ${cycleTime}s linear infinite`,
+                    } as React.CSSProperties}
+                  />
+                </div>
+              ) : (
+                <span className="text-[7px] text-zinc-650 font-extrabold uppercase tracking-wider">OFFLINE</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Handles */}
+        <Handle
+          key="power-in"
+          id="power-in"
+          type="target"
+          position={getRotatedPosition(Position.Top, rotation)}
+          title="Entrée d'énergie"
+          style={{
+            ...getHandleStyle(getRotatedPosition(Position.Top, rotation), 'rgba(168, 85, 247, 0.6)'),
+            opacity: handleOpacity,
+            transition: 'opacity 0.22s ease-in-out',
+          }}
+          className={HANDLE_POWER_IN}
+        />
+
+        {outPorts.map((p, i) => {
+          const rotPos = getRotatedPosition(Position.Right, rotation);
+          return (
+            <Handle
+              key={p.id}
+              id={p.id}
+              type="source"
+              position={rotPos}
+              style={getMultiHandleStyle(rotPos, i, outPorts.length, 'rgba(16, 185, 129, 0.6)')}
+              title={p.title}
+              className={HANDLE_OUT}
             />
           );
         })}
@@ -1034,7 +1222,7 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
         {selected && <HudBrackets color="#f97316" />}
         <NodeActions id={id} data={data} />
 
-        {/* Physical Chimney Stacks protruding from the top */}
+        {/* Physical Chimney Stacks protruding from the top (Representing clean air venting) */}
         <div ref={leftChimneyRef} className="absolute -top-[10px] left-[32px] w-6 h-[10px] bg-zinc-900 border-t-2 border-l border-r border-zinc-800 rounded-t shadow-[0_-2px_4px_rgba(0,0,0,0.5)] z-0 flex items-end justify-center">
           <div className="w-3.5 h-[6px] bg-zinc-950 rounded-t border-t border-zinc-900" />
         </div>
@@ -1046,7 +1234,7 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
         <div className="w-full h-8 flex items-center justify-between px-3 nf-smelter-exhaust-stack relative z-10">
           <div className="w-12 h-2.5 rounded-sm nf-smelter-vent-grille border border-zinc-800/40" />
           <div className="flex items-center gap-1.5 bg-zinc-950/90 border border-zinc-800 px-2 py-0.5 rounded-full shadow-[inset_0_1px_2px_rgba(0,0,0,0.6)]">
-            <span className="text-[8px] font-mono text-zinc-400 uppercase tracking-wide">Exhaust fan</span>
+            <span className="text-[8px] font-mono text-zinc-400 uppercase tracking-wide">Deduplicator Fan</span>
             <div className="w-4 h-4 rounded-full bg-zinc-900 border border-zinc-700/60 flex items-center justify-center overflow-hidden">
               <svg 
                 ref={fanRef}
@@ -1070,7 +1258,7 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
             <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-orange-500/10 text-orange-400 border border-orange-500/20 shrink-0 shadow-sm">
               <SmeltingIcon className="h-3.5 w-3.5" />
             </span>
-            <span className="font-extrabold tracking-tight text-zinc-100 text-[12.5px] uppercase">{building?.name ?? 'Smelter'}</span>
+            <span className="font-extrabold tracking-tight text-zinc-100 text-[12.5px] uppercase">{building?.name ?? 'Data Cleaner'}</span>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -1092,15 +1280,15 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
 
             {/* LED bar graph for thermal load */}
             {(() => {
-              const temp = powered ? (machineState === 'starved' ? 280 : 1450) : 20;
+              const rpm = powered ? (machineState === 'starved' ? 1800 : 9600) : 0;
               const totalBars = 6;
-              const activeBars = Math.round((temp / 1600) * totalBars);
+              const activeBars = Math.round((rpm / 10000) * totalBars);
               return (
-                <span className="inline-flex gap-[1.5px] items-center bg-zinc-950/80 px-1.5 py-0.5 rounded border border-zinc-800" title={`Charge thermique: ${temp}°C`}>
+                <span className="inline-flex gap-[1.5px] items-center bg-zinc-950/80 px-1.5 py-0.5 rounded border border-zinc-800" title={`Vitesse de filtrage: ${rpm} RPM`}>
                   {Array.from({ length: totalBars }).map((_, i) => (
                     <span 
-                      key={i} 
-                      className={`w-[2.5px] h-[5px] rounded-[0.5px] ${i < activeBars ? 'bg-orange-500 shadow-[0_0_2px_#f97316]' : 'bg-zinc-800'}`} 
+                       key={i} 
+                       className={`w-[2.5px] h-[5px] rounded-[0.5px] ${i < activeBars ? 'bg-orange-500 shadow-[0_0_2px_#f97316]' : 'bg-zinc-800'}`} 
                     />
                   ))}
                 </span>
@@ -1140,11 +1328,11 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
             )}
           </svg>
 
-          {/* Left: Input slot (Intake Hopper) */}
+          {/* Left: Input slot (Raw Corpus) */}
           <div className="flex-1 flex flex-col justify-center items-center z-10">
             {info.configured && info.inputs.length > 0 ? (
               <div className="flex flex-col items-center gap-1">
-                <span className="text-[7.5px] font-black uppercase text-zinc-450 tracking-wider select-none mb-0.5">Feed Intake</span>
+                <span className="text-[7.5px] font-black uppercase text-zinc-400 tracking-wider select-none mb-0.5">Raw Input</span>
                 {info.inputs.map((input, idx) => {
                   const actualRate = actualFlow?.inputs.get(input.itemId);
                   const consumed = input.ratePerMin;
@@ -1181,38 +1369,38 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full p-2 border border-dashed border-zinc-800/40 rounded-lg text-zinc-500 text-[8px] uppercase select-none">
-                No Intake
+                No Input
               </div>
             )}
           </div>
 
-          {/* Center: Crucible Chamber (with Circular Temperature Gauge) & Cycle progress bar */}
+          {/* Center: Token Scrubbing Chamber */}
           <div className="w-[88px] flex flex-col items-center justify-center gap-2 relative z-10 border-l border-r border-zinc-900/60 px-1">
             
-            {/* Circular temperature ring wrapping the viewport */}
+            {/* Centrifugal washer cylinder */}
             <div 
               className="w-[54px] h-[54px] rounded-full p-[4px] shadow-[0_4px_12px_rgba(0,0,0,0.7)] flex items-center justify-center relative overflow-hidden transition-all duration-500 shrink-0"
               style={{
                 background: powered 
-                  ? `conic-gradient(from 180deg, #fef08a 0%, #f97316 ${machineState === 'starved' ? 20 : 60}%, #ef4444 ${machineState === 'starved' ? 30 : 90}%, #222024 ${machineState === 'starved' ? 30 : 90}%)`
+                  ? `conic-gradient(from 180deg, #fdba74 0%, #f97316 ${machineState === 'starved' ? 20 : 60}%, #c2410c ${machineState === 'starved' ? 30 : 90}%, #222024 ${machineState === 'starved' ? 30 : 90}%)`
                   : '#222024'
               }}
             >
-              {/* Viewport Inner Chamber */}
+              {/* Inner Chamber */}
               <div className="w-[44px] h-[44px] rounded-full bg-zinc-950 flex items-center justify-center relative overflow-hidden z-10 shadow-[inset_0_1.5px_3px_rgba(0,0,0,0.95)]">
                 <div ref={coreRef} className={['absolute inset-0 rounded-full pointer-events-none transition-all duration-500', coreGlowClass].join(' ')} />
                 
-                {/* Viewport Crosshair Safety Grate */}
+                {/* Visual safety indicators */}
                 <div className="absolute inset-y-1 left-[21px] w-[1px] bg-zinc-950/45 z-10" />
                 <div className="absolute inset-x-1 top-[21px] h-[1px] bg-zinc-950/45 z-10" />
                 <div className="absolute inset-1 rounded-full border border-dashed border-zinc-950/30 pointer-events-none z-10" 
                      style={{ backgroundImage: 'radial-gradient(circle, #000 1.2px, transparent 1.2px)', backgroundSize: '3.5px 3.5px' }} />
 
-                {/* Crucible Rim Bolt Rivets */}
+                {/* Filter Rivets */}
                 {Array.from({ length: 6 }).map((_, idx) => {
                   const angle = (idx * 360) / 6;
                   const rad = (angle * Math.PI) / 180;
-                  const radius = 18; // px from center (placed on the inner rim edge)
+                  const radius = 18;
                   const left = 20.5 + radius * Math.cos(rad) - 1.5;
                   const top = 20.5 + radius * Math.sin(rad) - 1.5;
                   return (
@@ -1226,22 +1414,22 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
 
                 <div className="relative z-20 flex flex-col items-center justify-center select-none bg-zinc-950/90 w-[26px] h-[26px] rounded-full border border-zinc-900/80 shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                   <span className="text-[7px] font-black text-orange-400 font-mono tracking-tighter leading-none drop-shadow-[0_0_2px_#f97316]">
-                    {powered && machineState !== 'starved' ? '1450' : (machineState === 'starved' ? '280' : '20')}
+                    {powered && machineState !== 'starved' ? '9.6k' : (machineState === 'starved' ? '1.8k' : '0')}
                   </span>
-                  <span className="text-[5px] text-zinc-500 font-mono uppercase tracking-widest leading-none mt-0.5">°C</span>
+                  <span className="text-[5px] text-zinc-500 font-mono uppercase tracking-widest leading-none mt-0.5">RPM</span>
                 </div>
               </div>
             </div>
 
             {info.configured && cycleTime > 0 ? (
               <div className="w-full flex flex-col items-center gap-0.5">
-                <span className="text-[7px] font-black uppercase text-zinc-450 tracking-widest select-none">Melt Cycle</span>
+                <span className="text-[7px] font-black uppercase text-zinc-400 tracking-widest select-none">Scrub Cycle</span>
                 <div className="w-[64px] h-1.5 relative rounded bg-zinc-950/90 border border-zinc-800/80 overflow-hidden shadow-inner">
                   <div
                     className="absolute inset-y-0 left-0 rounded-l"
                     style={{
                       width: '100%',
-                      background: 'linear-gradient(90deg, #b91c1c, #f97316 80%, #ffeb99 100%)',
+                      background: 'linear-gradient(90deg, #ea580c, #f97316 80%, #ffedd5 100%)',
                       boxShadow: '0 0 6px 1px rgba(249, 115, 22, 0.6)',
                       transformOrigin: 'left center',
                       animation: `nf-cycle ${cycleTime}s linear infinite`,
@@ -1254,11 +1442,11 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
             )}
           </div>
 
-          {/* Right: Output slot (Casting Channel) */}
+          {/* Right: Output slot (Cleaned Output) */}
           <div className="flex-1 flex flex-col justify-center items-center z-10">
             {info.configured && info.outputs.length > 0 ? (
               <div className="flex flex-col items-center gap-1">
-                <span className="text-[7.5px] font-black uppercase text-zinc-450 tracking-wider mr-1 text-right select-none mb-0.5">Casting Out</span>
+                <span className="text-[7.5px] font-black uppercase text-zinc-400 tracking-wider mr-1 text-right select-none mb-0.5">Clean Output</span>
                 {info.outputs.map((output, idx) => {
                   const actualRate = actualFlow?.outputs.get(output.itemId);
                   const produced = output.ratePerMin;
@@ -1287,7 +1475,7 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
                 })}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center h-full p-2 border border-dashed border-zinc-800/40 rounded-lg text-zinc-550 text-[8px] uppercase select-none text-center">
+              <div className="flex flex-col items-center justify-center h-full p-2 border border-dashed border-zinc-800/40 rounded-lg text-zinc-500 text-[8px] uppercase select-none text-center">
                 📟 Configure Rec.
               </div>
             )}
@@ -1360,6 +1548,16 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
         selected ? 'nf-node-selected-glow scale-[1.01]' : '',
       ].join(' ')}
     >
+
+      {/* Visual background for Synapse Training (manufacturing) */}
+      {building?.category === 'manufacturing' && (
+        <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none z-0 opacity-25 flex items-center justify-around px-8">
+          <div className={`w-2 h-2 rounded-full nf-synapse-node ${isNominal ? 'nf-synapse-active' : ''}`} style={{ animationDelay: '0s' }} />
+          <div className={`w-2.5 h-2.5 rounded-full nf-synapse-node ${isNominal ? 'nf-synapse-active' : ''}`} style={{ animationDelay: '0.4s' }} />
+          <div className={`w-2 h-2 rounded-full nf-synapse-node ${isNominal ? 'nf-synapse-active' : ''}`} style={{ animationDelay: '0.8s' }} />
+        </div>
+      )}
+
       <div ref={particleContainerRef} className="absolute inset-0 pointer-events-none overflow-visible z-30" />
       {selected && <HudBrackets color={accentColor} />}
       <NodeActions id={id} data={data} />
@@ -1380,7 +1578,7 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
           position={getRotatedPosition(Position.Bottom, rotation)}
           title="Sortie d'énergie"
           style={{
-            ...getHandleStyle(getRotatedPosition(Position.Bottom, rotation), 'rgba(245, 158, 11, 0.6)'),
+            ...getHandleStyle(getRotatedPosition(Position.Bottom, rotation), 'rgba(168, 85, 247, 0.6)'),
             opacity: handleOpacity,
             transition: 'opacity 0.22s ease-in-out',
           }}
@@ -1394,7 +1592,7 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
           position={getRotatedPosition(Position.Top, rotation)}
           title="Entrée d'énergie"
           style={{
-            ...getHandleStyle(getRotatedPosition(Position.Top, rotation), 'rgba(245, 158, 11, 0.6)'),
+            ...getHandleStyle(getRotatedPosition(Position.Top, rotation), 'rgba(168, 85, 247, 0.6)'),
             opacity: handleOpacity,
             transition: 'opacity 0.22s ease-in-out',
           }}
@@ -1425,7 +1623,6 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
             <span className={`flex h-6.5 w-6.5 items-center justify-center rounded-lg ${CATEGORY_CHIP[building.category]} shrink-0`}>
               <IconComponent className={[
                 'h-4 w-4',
-                isNominal && building.category === 'extraction' ? 'nf-vibe-active' : '',
                 isNominal && building.category === 'manufacturing' ? 'nf-spin-active' : '',
               ].join(' ')} />
             </span>
@@ -1511,9 +1708,6 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
           {/* Télémétrie de sous-en-tête technique unique par machine */}
           <div className="flex justify-between items-center text-[9px] font-mono text-zinc-500 border-b border-zinc-900 pb-1.5 mb-1 select-none tracking-wider">
             <span>// UNIT_NODE_{id.substring(0, 4).toUpperCase()}</span>
-            {building?.category === 'extraction' && (
-              <span className="text-amber-500/80 font-bold">PURITY: {data.purity?.toUpperCase() || 'NORMAL'}</span>
-            )}
             {building?.category === 'manufacturing' && (
               <span className="text-sky-400/85 font-bold">RECIPE_CYCLE: {info.recipe?.time ?? 0}S</span>
             )}
@@ -1596,7 +1790,7 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
                         >
                           {round(actualRate)}
                         </span>
-                        <span className="text-[8.5px] text-zinc-555">/{round(consumed)}/m</span>
+                        <span className="text-[8.5px] text-zinc-500">/{round(consumed)}/m</span>
                       </span>
                     ) : (
                       <span className="ml-auto text-[10px] text-orange-400/80 font-mono font-semibold bg-zinc-900/40 px-2 py-0.5 rounded-lg border border-zinc-800/40">{round(consumed)}/m</span>
@@ -1609,7 +1803,7 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
           {cycleTime > 0 && <CycleBar seconds={cycleTime} color={accentColor} />}
         </div>
       ) : (
-        <div className="mt-1 flex items-center justify-center py-2 text-center font-bold uppercase tracking-wider text-[10px] text-zinc-550 bg-zinc-950/40 rounded-xl border border-zinc-900/80 shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)] relative z-10">
+        <div className="mt-1 flex items-center justify-center py-2 text-center font-bold uppercase tracking-wider text-[10px] text-zinc-500 bg-zinc-950/40 rounded-xl border border-zinc-900/80 shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)] relative z-10">
           📟 À configurer
         </div>
       )}
@@ -1630,10 +1824,6 @@ export function MachineNode({ id, data, selected }: NodeProps<MachineNodeType>) 
         );
       })}
 
-      {/* Bande de signalisation industrielle pour les mineurs */}
-      {building?.category === 'extraction' && (
-        <div className="absolute bottom-0 inset-x-0 h-1.5 nf-hazard-stripes opacity-70 z-0" />
-      )}
     </div>
   );
 }

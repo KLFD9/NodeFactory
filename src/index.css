@@ -1360,5 +1360,147 @@ body,
   z-index: 50 !important;
 }
 
+/* ── Scrappy AI Lab Node Styling Extensions ── */
 
+/* 1. Matrix Code Rain/Digital Grid for Data Crawlers */
+@keyframes crawler-grid-pan {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 40px; }
+}
 
+.nf-harvester-screen {
+  background-color: #020503;
+  background-image: 
+    linear-gradient(rgba(34, 197, 94, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 197, 94, 0.05) 1px, transparent 1px);
+  background-size: 8px 8px;
+  border: 1px solid rgba(34, 197, 94, 0.15);
+  box-shadow: inset 0 0 10px rgba(34, 197, 94, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.nf-harvester-matrix-rain {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 0%, rgba(34, 197, 94, 0.15) 50%, transparent 100%);
+  background-size: 100% 40px;
+  animation: crawler-grid-pan 1.5s linear infinite;
+  pointer-events: none;
+}
+
+/* 2. Token Cleaner / Washer spinning cylinder */
+@keyframes cleaner-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.nf-cleaner-washer-ring {
+  border: 2px dashed rgba(249, 115, 22, 0.45);
+  border-radius: 50%;
+  animation: cleaner-spin 4s linear infinite;
+}
+
+.nf-cleaner-washer-active {
+  border-color: #f97316;
+  animation-duration: 1.5s;
+  box-shadow: 0 0 8px rgba(249, 115, 22, 0.3);
+}
+
+/* 3. Neural Synapses pulses for Training Units */
+@keyframes synapse-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.9); box-shadow: 0 0 4px rgba(56, 189, 248, 0.2); }
+  50% { opacity: 1; transform: scale(1.1); box-shadow: 0 0 12px rgba(56, 189, 248, 0.6); }
+}
+
+.nf-synapse-node {
+  animation: synapse-pulse 2s infinite ease-in-out;
+}
+
+.nf-synapse-active {
+  animation-duration: 0.8s;
+  background-color: #38bdf8;
+}
+
+/* 4. Datacenter node theme */
+.nf-datacenter-node {
+  background: radial-gradient(circle at 30% 20%, #15102a 0%, #06030d 100%) !important;
+  border: 1.5px solid rgba(168, 85, 247, 0.35) !important;
+  box-shadow: 
+    0 16px 40px -10px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.8),
+    0 0 15px 1px rgba(168, 85, 247, 0.1) !important;
+  border-radius: 14px !important;
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  clip-path: polygon(
+    0% 8px, 
+    8px 0%, 
+    calc(100% - 8px) 0%, 
+    100% 8px, 
+    100% calc(100% - 8px), 
+    calc(100% - 8px) 100%, 
+    8px 100%, 
+    0% calc(100% - 8px)
+  );
+}
+
+.nf-datacenter-node.react-flow__node-selected,
+.nf-datacenter-node.nf-node-selected-glow {
+  border-color: #a855f7 !important;
+  box-shadow: 
+    0 0 0 1.5px #a855f7,
+    0 0 25px 4px rgba(168, 85, 247, 0.45),
+    0 16px 40px -10px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.12) !important;
+  transform: scale(1.015);
+}
+
+/* 5. Liquid Coolant pipe flow indicator */
+@keyframes dc-pipe-flow {
+  to { stroke-dashoffset: -20; }
+}
+
+.nf-dc-flowline {
+  stroke-dasharray: 5 5;
+  animation: dc-pipe-flow 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nf-harvester-matrix-rain,
+  .nf-cleaner-washer-ring,
+  .nf-synapse-node,
+  .nf-dc-flowline {
+    animation: none !important;
+  }
+}.nf-harvester-node {
+  background: radial-gradient(circle at 30% 20%, #0d1a12 0%, #030604 100%) !important; /* Premium dark forest green radial gradient */
+  border: 1.5px solid rgba(34, 197, 94, 0.4) !important;
+  box-shadow: 
+    0 16px 40px -10px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.8),
+    0 0 15px 1px rgba(34, 197, 94, 0.15) !important;
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  clip-path: polygon(
+    0% 12px, 
+    12px 0%, 
+    calc(100% - 12px) 0%, 
+    100% 12px, 
+    100% calc(100% - 12px), 
+    calc(100% - 12px) 100%, 
+    12px 100%, 
+    0% calc(100% - 12px)
+  );
+}
+
+.nf-harvester-node.react-flow__node-selected,
+.nf-harvester-node.nf-node-selected-glow {
+  border-color: #22c55e !important;
+  box-shadow: 
+    0 0 0 1.5px #22c55e,
+    0 0 25px 4px rgba(34, 197, 94, 0.5),
+    0 16px 40px -10px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.12) !important;
+  transform: scale(1.015);
+}

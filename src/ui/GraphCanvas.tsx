@@ -362,8 +362,8 @@ function Flow() {
       const building = gameData.buildings.find((b) => b.id === data.buildingId);
       if (!building || building.category !== 'extraction') return;
 
-      const cx = node.position.x + 110;
-      const cy = node.position.y + 40;
+      const cx = node.position.x + 220;
+      const cy = node.position.y + 90;
       const all = useGraphStore.getState().nodes;
       const isFree = (depId: string, pinIdx: number) =>
         !all.some((n) => n.id !== node.id && n.data.depositId === depId && n.data.pinIndex === pinIdx);

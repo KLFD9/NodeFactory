@@ -81,6 +81,7 @@ export function ResourceLayer() {
             {/* Pins d'extraction */}
             {d.pins.map((pin, i) => {
               const isOccupied = occupied.has(`${d.id}:${i}`);
+              if (isOccupied) return null;
               const binding: MinerBinding = {
                 depositId: d.id,
                 pinIndex: i,
