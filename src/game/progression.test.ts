@@ -14,11 +14,18 @@ import {
   initialProgression,
   isBuildingUnlocked,
   isRecipeUnlocked,
+  isTycoonUnlocked,
   milestoneProgress,
   nextMilestone,
+  shipModelProject,
+  startModelProject,
+  runMarketingPush,
+  hireStaffMember,
   trySpendBolts,
+  COMPUTE_ITEM_ID,
   type ProgressionState,
 } from './progression';
+import { modelTypeDef, staffRoleDef, totalSalaryPerMin } from './tycoon';
 import { LAUNCH_CONTRACT } from './contracts';
 
 /** Recettes mock minimales pour tester le filtrage des alternatives. */
@@ -47,6 +54,152 @@ describe('initialProgression', () => {
     expect(s.unlockedRecipes).toEqual([]);
     expect(s.lastSeenMs).toBe(NOW);
     expect(s.prestigeCount).toBe(0);
+  });
+});
+
+describe('couche Tycoon — intégration au tick', () => {
+  it('isTycoonUnlocked passe à vrai dès qu’on a produit du compute', () => {
+    expect(isTycoonUnlocked(freshState())).toBe(false);
+    expect(isTycoonUnlocked(freshState({ cumulativeProduced: { [COMPUTE_ITEM_ID]: 5 } }))).toBe(true);
+  });
+
+  it('un run avance au débit de compute et signale sa complétion via le tick', () => {
+    const required = modelTypeDef('language').computeRequired;
+    let s = startModelProject(freshState(), {
+      modelType: 'language',
+      domain: 'assistant',
+      effort: modelTypeDef('language').idealEffort,
+    });
+    expect(s.tycoon.activeProject).not.toBeNull();
+
+    // Le compute (item electricity) doit faire avancer le run.
+    const res = applyProductionTick(s, {
+      grossProduction: [
+        { itemId: COMPUTE_ITEM_ID, ratePerMin: required },
+        { itemId: 'iron-ingot', ratePerMin: 30 },
+      ],
+      totalOutputPerMin: 30,
+      efficiency: 1,
+      dtMin: 1,
+      nowMs: NOW + 60_000,
+    });
+    s = res.state;
+    expect(s.tycoon.activeProject!.computeInvested).toBeCloseTo(required, 6);
+    expect(s.tycoon.activeProject!.datasetAccumulated).toBeCloseTo(30, 6);
+    expect(res.runJustCompleted).toBe(true);
+  });
+
+  it('shipModelProject crédite les revenus en Bolts et les RP', () => {
+    const required = modelTypeDef('language').computeRequired;
+    let s = startModelProject(
+      freshState({ tycoon: { ...initialProgression(NOW).tycoon, trend: { modelType: 'language', domain: 'assistant' } } }),
+      { modelType: 'language', domain: 'assistant', effort: modelTypeDef('language').idealEffort },
+    );
+    // Compléter le run (compute + dataset).
+    s = applyProductionTick(s, {
+      grossProduction: [
+        { itemId: COMPUTE_ITEM_ID, ratePerMin: required },
+        { itemId: 'iron-ingot', ratePerMin: required },
+      ],
+      totalOutputPerMin: 0,
+      efficiency: 1,
+      dtMin: 1,
+      nowMs: NOW + 60_000,
+    }).state;
+
+    const boltsBefore = s.bolts;
+    const rpBefore = s.researchPoints;
+    const { state: after, review } = shipModelProject(s);
+    expect(review).not.toBeNull();
+    expect(after.bolts).toBe(boltsBefore + review!.revenue);
+    expect(after.researchPoints).toBeCloseTo(rpBefore + review!.rpReward, 6);
+    expect(after.tycoon.activeProject).toBeNull();
+    expect(after.tycoon.shippedModels).toBe(1);
+  });
+
+  it('hireStaffMember débite le coût et refuse si solde insuffisant', () => {
+    const cost = staffRoleDef('engineer').hireCost;
+    const rich = freshState({ bolts: cost + 10 });
+    const hired = hireStaffMember(rich, 'engineer');
+    expect(hired.spent).toBe(true);
+    expect(hired.state.bolts).toBe(10);
+    expect(hired.state.tycoon.staff.engineer).toBe(1);
+
+    const poor = freshState({ bolts: cost - 1 });
+    const refused = hireStaffMember(poor, 'engineer');
+    expect(refused.spent).toBe(false);
+    expect(refused.state.tycoon.staff.engineer).toBe(0);
+  });
+
+  it('la masse salariale est débitée des Bolts au tick (jamais sous zéro)', () => {
+    // 2 ingénieurs → salaire = 2 × salaryPerMin ; sur 1 min, débité des Bolts.
+    let s = freshState({ bolts: 1000 });
+    s = hireStaffMember(s, 'engineer').state;
+    s = hireStaffMember(s, 'engineer').state;
+    expect(s.tycoon.staff.engineer).toBe(2);
+    const boltsAfterHire = s.bolts;
+    const salaryPerMin = totalSalaryPerMin(s.tycoon.staff);
+    const ticked = applyProductionTick(s, {
+      grossProduction: [],
+      totalOutputPerMin: 0,
+      efficiency: 1,
+      dtMin: 1,
+      nowMs: NOW + 60_000,
+    }).state;
+    expect(ticked.bolts).toBeCloseTo(boltsAfterHire - salaryPerMin, 6);
+
+    // Solde quasi nul : le salaire ne fait jamais passer sous zéro.
+    const broke = applyProductionTick(freshState({ bolts: 0.1, tycoon: s.tycoon }), {
+      grossProduction: [],
+      totalOutputPerMin: 0,
+      efficiency: 1,
+      dtMin: 5,
+      nowMs: NOW + 300_000,
+    }).state;
+    expect(broke.bolts).toBe(0);
+  });
+
+  it('runMarketingPush monte le hype du projet et débite des Bolts', () => {
+    let s = startModelProject(freshState({ bolts: 500 }), {
+      modelType: 'language',
+      domain: 'assistant',
+      effort: modelTypeDef('language').idealEffort,
+    });
+    const hypeBefore = s.tycoon.activeProject!.hype;
+    const boltsBefore = s.bolts;
+    const pushed = runMarketingPush(s);
+    expect(pushed.spent).toBe(true);
+    expect(pushed.state.tycoon.activeProject!.hype).toBeGreaterThan(hypeBefore);
+    expect(pushed.state.bolts).toBeLessThan(boltsBefore);
+
+    // Sans projet actif : refusé.
+    s = freshState({ bolts: 500 });
+    expect(runMarketingPush(s).spent).toBe(false);
+  });
+
+  it('un ingénieur accélère le run (plus de compute investi à débit égal)', () => {
+    const cfg = {
+      modelType: 'language' as const,
+      domain: 'assistant' as const,
+      effort: modelTypeDef('language').idealEffort,
+    };
+    const tick = (state: ProgressionState) =>
+      applyProductionTick(state, {
+        grossProduction: [{ itemId: COMPUTE_ITEM_ID, ratePerMin: 30 }],
+        totalOutputPerMin: 0,
+        efficiency: 1,
+        dtMin: 1,
+        nowMs: NOW + 60_000,
+      }).state;
+
+    const baseline = tick(startModelProject(freshState(), cfg));
+    let withEng = startModelProject(freshState({ bolts: 1000 }), cfg);
+    withEng = hireStaffMember(withEng, 'engineer').state;
+    withEng = tick(withEng);
+
+    expect(withEng.tycoon.activeProject!.computeInvested).toBeGreaterThan(
+      baseline.tycoon.activeProject!.computeInvested,
+    );
   });
 });
 

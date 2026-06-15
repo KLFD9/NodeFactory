@@ -434,3 +434,45 @@ test.describe('Progression (milestones)', () => {
     await expect(paletteItem(page, 'Fine-Tuning Rig')).toHaveCount(0);
   });
 });
+
+test.describe('Le Bureau (couche Tycoon)', () => {
+  test('LAB caché tant qu’aucun compute n’a été produit', async ({ page }) => {
+    await seedProgression(page);
+    await gotoReady(page);
+    await expect(page.getByTestId('tycoon-toggle-btn')).toHaveCount(0);
+  });
+
+  test('compute produit → LAB visible → lancer un run affiche la progression', async ({ page }) => {
+    // Du compute déjà produit débloque la couche Tycoon (item electricity).
+    await seedProgression(page, { cumulativeProduced: { electricity: 50 } });
+    await gotoReady(page);
+
+    // Le bouton LAB apparaît ; on ouvre Le Bureau.
+    const lab = page.getByTestId('tycoon-toggle-btn');
+    await expect(lab).toBeVisible();
+    await lab.click();
+    await expect(page.getByTestId('tycoon-panel')).toBeVisible();
+
+    // Setup de projet visible → on lance l'entraînement.
+    await expect(page.getByTestId('project-setup')).toBeVisible();
+    await page.getByTestId('start-project').click();
+
+    // Le run actif s'affiche avec sa barre de progression compute.
+    await expect(page.getByTestId('active-run')).toBeVisible();
+    await expect(page.getByTestId('ship-model')).toBeVisible();
+    // Le marketing pré-lancement est proposé pendant le run.
+    await expect(page.getByTestId('run-marketing')).toBeVisible();
+  });
+
+  test('embauche de staff : Bolts débités, effectif affiché', async ({ page }) => {
+    await seedProgression(page, { cumulativeProduced: { electricity: 50 }, bolts: 1000 });
+    await gotoReady(page);
+    await page.getByTestId('tycoon-toggle-btn').click();
+
+    const staff = page.getByTestId('staff-section');
+    await expect(staff).toBeVisible();
+    await page.getByTestId('hire-engineer').click();
+    // L'effectif ingénieur passe à ×1 (badge).
+    await expect(staff.getByText('×1')).toBeVisible();
+  });
+});

@@ -30,6 +30,28 @@ import {
   type ContractSlice,
   type ProducibleItem,
 } from './contracts';
+import {
+  initialTycoon,
+  advanceTycoon,
+  startProject,
+  shipModel,
+  labSpeedMult,
+  labDatasetMult,
+  labQualityBonus,
+  totalSalaryPerMin,
+  hireStaffState,
+  staffRoleDef,
+  applyMarketing,
+  canMarket,
+  marketingCost,
+  type TycoonState,
+  type ProjectConfig,
+  type ModelReview,
+  type StaffRole,
+} from './tycoon';
+
+/** Item représentant le COMPUTE dans le dataset (l'« électricité » re-thématisée). */
+export const COMPUTE_ITEM_ID = 'electricity';
 
 // ---------------------------------------------------------------------------
 // État sérialisable de la progression
@@ -80,6 +102,10 @@ export interface ProgressionState {
   contractSeed: number;
   /** `gameMinutesElapsed` à la génération du lot d'offres courant. */
   offersGeneratedAtGameMin: number;
+
+  // --- Couche Tycoon (Le Bureau : projets de modèle → ship → revenus) ---
+  /** État de la méta-couche startup IA (projet en cours, renommée, tendance…). */
+  tycoon: TycoonState;
 }
 
 /** État de départ : tout à zéro, horloge calée sur maintenant. */
@@ -107,6 +133,8 @@ export function initialProgression(nowMs: number = Date.now()): ProgressionState
     // Graine dérivée de l'horloge de création : carte de contrats variée d'une partie à l'autre.
     contractSeed: (nowMs >>> 0) || 1,
     offersGeneratedAtGameMin: 0,
+    // Graine décalée pour que la tendance marché ne soit pas corrélée aux contrats.
+    tycoon: initialTycoon(((nowMs >>> 0) ^ 0x9e3779b9) || 7),
   };
 }
 
@@ -170,6 +198,8 @@ export interface TickResult {
   contractCompleted: ContractOffer | null;
   /** Contrat échoué ce tick (deadline dépassée). */
   contractFailed: ContractOffer | null;
+  /** Le run d'entraînement vient de se terminer ce tick (prêt à shipper). */
+  runJustCompleted: boolean;
 }
 
 /** Applique un débloquage à l'état (immuable, dédupliqué). */
@@ -313,6 +343,34 @@ export function applyProductionTick(state: ProgressionState, input: TickInput): 
     next = { ...next, unlockedBuildings: [...next.unlockedBuildings, events.unlock.id] };
   }
 
+  // 5. Couche Tycoon : le run d'entraînement avance au DÉBIT de compute de l'usine
+  //    (item `electricity`), et accumule le volume de dataset clé du projet en cours.
+  //    Le run consomme le compute en flux (Q6) → optimiser l'usine accélère le méta-jeu.
+  //    Le STAFF amplifie le run : ingénieurs → vitesse (× compute), data scientists →
+  //    efficacité du dataset (× accumulation). Ainsi « agrandir l'usine » ET « embaucher »
+  //    accélèrent tous deux les itérations.
+  const rateOf = (itemId: string) =>
+    grossProduction.find((p) => p.itemId === itemId)?.ratePerMin ?? 0;
+  const speedMult = labSpeedMult(next.tycoon.staff);
+  const datasetMult = labDatasetMult(next.tycoon.staff);
+  const computeThroughputPerMin = rateOf(COMPUTE_ITEM_ID) * speedMult;
+  const keyItemId = next.tycoon.activeProject?.datasetKeyItemId;
+  const keyItemProductionPerMin = keyItemId ? rateOf(keyItemId) * datasetMult : 0;
+  const tycoonTick = advanceTycoon(next.tycoon, {
+    computeThroughputPerMin,
+    keyItemProductionPerMin,
+    dtMin: safeDtMin,
+    gameMinutesElapsed,
+  });
+  next = { ...next, tycoon: tycoonTick.tycoon };
+
+  // 5bis. Masse salariale : le staff coûte des $ (Bolts) en continu — tension scrappy.
+  //       Débitée même usine à l'arrêt (les salaires courent), jamais sous zéro.
+  if (safeDtMin > 0) {
+    const salary = totalSalaryPerMin(next.tycoon.staff) * safeDtMin;
+    if (salary > 0) next = { ...next, bolts: Math.max(0, next.bolts - salary) };
+  }
+
   return {
     state: next,
     newlyReached,
@@ -320,6 +378,7 @@ export function applyProductionTick(state: ProgressionState, input: TickInput): 
     rpGained,
     contractCompleted: events.completed,
     contractFailed: events.failed,
+    runJustCompleted: tycoonTick.runJustCompleted,
   };
 }
 
@@ -355,6 +414,83 @@ export function trySpendBolts(state: ProgressionState, cost: number): SpendResul
 export function acceptContract(state: ProgressionState, offerId: string): ProgressionState {
   const slice = acceptOffer(contractSliceOf(state), offerId, state.gameMinutesElapsed);
   return { ...state, activeContract: slice.activeContract, contractOffers: slice.contractOffers };
+}
+
+// ---------------------------------------------------------------------------
+// Couche Tycoon — démarrer un projet / shipper (le reste du run vit dans le tick)
+// ---------------------------------------------------------------------------
+
+/**
+ * La couche Tycoon (Le Bureau) est-elle débloquée ? Vrai dès que l'usine a produit du
+ * COMPUTE (item `electricity`) — il faut du calcul pour entraîner un modèle. Pilote
+ * l'affichage du panneau Tycoon (progressive disclosure : pas de méta-couche tant que le
+ * joueur n'a pas bouclé sa boucle compute).
+ */
+export function isTycoonUnlocked(state: Pick<ProgressionState, 'cumulativeProduced'>): boolean {
+  return (state.cumulativeProduced[COMPUTE_ITEM_ID] ?? 0) > 0;
+}
+
+/** Démarre un projet de modèle (1 run max). État inchangé si un run est déjà actif. */
+export function startModelProject(state: ProgressionState, config: ProjectConfig): ProgressionState {
+  return { ...state, tycoon: startProject(state.tycoon, config, state.gameMinutesElapsed) };
+}
+
+export interface ShipModelResult {
+  state: ProgressionState;
+  /** Review du modèle shippé, ou null si aucun run terminé à shipper. */
+  review: ModelReview | null;
+}
+
+/**
+ * Shippe le projet actif (run terminé requis). Crédite les revenus ($ → Bolts) et les RP de
+ * la review ; la renommée et le benchmark sont gérés dans l'état Tycoon. Le bonus de qualité
+ * du STAFF (chercheurs) est appliqué à la review. État inchangé (review null) si aucun run
+ * terminé n'est prêt.
+ */
+export function shipModelProject(state: ProgressionState): ShipModelResult {
+  const result = shipModel(
+    state.tycoon,
+    state.gameMinutesElapsed,
+    labQualityBonus(state.tycoon.staff),
+  );
+  if (!result) return { state, review: null };
+  const next: ProgressionState = {
+    ...state,
+    tycoon: result.tycoon,
+    bolts: state.bolts + result.review.revenue,
+    researchPoints: state.researchPoints + result.review.rpReward,
+  };
+  return { state: next, review: result.review };
+}
+
+/**
+ * Lance une poussée marketing sur le projet actif (monte le hype). Dépense des $ (Bolts) ;
+ * refuse (spent: false) sans projet, hype au plafond, ou solde insuffisant.
+ */
+export function runMarketingPush(state: ProgressionState): SpendResult {
+  const project = state.tycoon.activeProject;
+  if (!project || !canMarket(project)) return { state, spent: false };
+  const cost = marketingCost(project.hype);
+  const { state: paid, spent } = trySpendBolts(state, cost);
+  if (!spent) return { state, spent: false };
+  return {
+    state: { ...paid, tycoon: { ...paid.tycoon, activeProject: applyMarketing(project) } },
+    spent: true,
+  };
+}
+
+/**
+ * Embauche un membre du staff. Dépense le coût d'embauche ($ → Bolts) ; refuse (spent: false)
+ * si le solde est insuffisant. La masse salariale récurrente est ensuite débitée au tick.
+ */
+export function hireStaffMember(state: ProgressionState, role: StaffRole): SpendResult {
+  const cost = staffRoleDef(role).hireCost;
+  const { state: paid, spent } = trySpendBolts(state, cost);
+  if (!spent) return { state, spent: false };
+  return {
+    state: { ...paid, tycoon: { ...paid.tycoon, staff: hireStaffState(paid.tycoon.staff, role) } },
+    spent: true,
+  };
 }
 
 // ---------------------------------------------------------------------------

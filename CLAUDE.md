@@ -82,29 +82,36 @@ Vite + React 18 + TypeScript strict · React Flow `@xyflow/react` · Zustand · 
   industriel (monochrome, glow). Les caractères techniques monochromes (✓ ▶ ▼) sont tolérés
   dans les badges façon terminal ; aucun emoji coloré.
 
-## État du jeu (2026-06-12)
+## État du jeu (2026-06-15)
 
-**Jouable de bout en bout** : accueil (1er lancement) → tutoriel 9 étapes / 3 sections
-(Électricité : boucle charbon auto-alimentée → Production de fer → Automatisation), dérivé de
-l'état réel du graphe (`src/game/tutorial.ts`) · pose payée en **AP** (capital initial 50,
-`BUILDING_COSTS`) · clic-sur-pin pose un mineur lié · **suggestion contextuelle** (« + Smelter
-relié », dérivée des données) · 13 milestones (M1-M10 + M11-M13 gatant les alts paliers 2/3) ·
-score d'efficacité 3 dims · récap offline (popup, plafond 4 h) · usine/progression/monde
-**persistés** (reload sûr) · minimap avec gisements + bouton « Vue d'ensemble » · UI HUD
-industriel (toolbar gauche flottante OBJ/COMP, bannière ressources, GSAP) · carte du monde
-en **biomes** (pavage Voronoï, `src/game/biomeMap.ts`) couvrant `±BOUNDS`, placement des
-gisements biaisé par affinité de biome (`src/game/resourceMap.ts`), `minZoom=0.2` pour que
-la carte remplisse l'écran au dézoom max — détails et piste « exploration » future dans
-`Docs/design/2026-06-14-biomes-carte-monde.md`.
+> **Source de vérité « état + route vers la prod »** : `Docs/design/2026-06-15-roadmap-prod.md`
+> (étapes établies, tâches restantes priorisées, check-list de vérification avant release).
+> Cette section en est le résumé ; mettre les deux à jour ensemble.
 
-**~220 tests unitaires + 15 E2E verts.** Backlog priorisé :
-`Docs/design/2026-06-12-backlog-gameplay.md` (P1 restants : prestige ; puis pondération AP,
-stats de production, partage URL…). Économie v1 : spec
-`Docs/design/2026-06-10-economie-maison-v1.md`.
+**Pivot thématique acté — « Scrappy AI Lab »** (factory idle × Game Dev Tycoon). Le *genre*
+(factory-builder + idle + score LP) est conservé ; seul le **thème** change (startup IA, vocabulaire
+authentique mais accessible) et une **couche méta « Tycoon »** s'ajoute par-dessus le moteur d'usine.
+Doc directeur : `Docs/design/2026-06-14-pivot-theme-startup-ia.md`.
 
-**En réflexion (design)** : refonte de la monnaie — AP scindés en **Points de Recherche**
-(déblocages) + monnaie d'amélioration des machines (rendement/énergie par niveau, courbes
-×1.1/×1.15 déjà dans `balance.ts`). Voir le doc de design dédié dans `Docs/design/`.
+**Salle des machines (moteur usine) — jouable de bout en bout** : accueil → tutoriel 9 étapes / 3
+sections (Compute : boucle données→Datacenter auto-alimentée → Pipeline de données → Automatisation),
+dérivé du graphe (`src/game/tutorial.ts`) · pose payée en **Bolts** (capital 50, `BUILDING_COSTS`) ·
+clic-sur-pin pose un extracteur lié · suggestion contextuelle · 13 milestones · **contrats** clients
+procéduraux (source de Bolts) · améliorations par machine · score d'efficacité 3 dims · récap offline
+(plafond 4 h) · usine/progression/monde **persistés** · carte du monde en **biomes** · UI HUD
+(toolbar OBJ/COMP/INSP/BILAN, GSAP). Dataset re-thématisé IA (`public/data/mock/`).
+
+**Le Bureau (couche Tycoon, P1 livré)** : `src/game/tycoon.ts` (PUR, testé) — projet de modèle
+(type × domaine × **dosage des phases**), **run piloté par le débit de compute** (= item `electricity`),
+**qualité** = axe séparé du LP (dosage × dataset × compute − défauts) ; **ship → review** (benchmark +
+réception × tendance × **hype**) → **revenus $ + RP + renommée** ; **staff** (3 rôles : vitesse run /
+qualité / dataset, **masse salariale** récurrente) ; **marketing** pré-lancement. UI : `TycoonPanel`
+(bouton **LAB** gaté au compute) + `ShipReviewToast`. Boucle : produire compute → projet → (marketing)
+→ ship → $/RP/renommée → réinvestir (usine + staff) → recommencer.
+
+**341 tests unitaires + 19 E2E verts** (typecheck + build OK). ⚠️ 1 E2E `AMÉLIORER` cassé **avant le
+pivot** (NodeToolbar introuvable, sans rapport — à corriger). Tous les nombres de `tycoon.ts` sont un
+premier jet `[À VALIDER game-balance]`. **Non committé** (cohérent avec l'historique).
 
 ## Pièges connus (appris sur le terrain)
 

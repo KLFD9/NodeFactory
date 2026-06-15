@@ -5,9 +5,12 @@ import { useGraphStore } from '@/store/useGraphStore';
 import { useProgressionStore } from '@/store/useProgressionStore';
 import { useWorldStore } from '@/store/useWorldStore';
 import { computeFactory } from '@/graph/computeFactory';
+import { isTycoonUnlocked } from '@/game/progression';
 import { Palette } from './Palette';
 import { ContractPanel } from './ContractPanel';
 import { ContractToast } from './ContractToast';
+import { TycoonPanel } from './TycoonPanel';
+import { ShipReviewToast } from './ShipReviewToast';
 import { GraphCanvas } from './GraphCanvas';
 import { Inspector } from './Inspector';
 import { FactorySummaryPanel } from './FactorySummaryPanel';
@@ -76,6 +79,25 @@ function DashboardIcon(props: React.SVGProps<SVGSVGElement>) {
       <rect x="14" y="3" width="7" height="5" rx="1" />
       <rect x="14" y="12" width="7" height="9" rx="1" />
       <rect x="3" y="16" width="7" height="5" rx="1" />
+    </svg>
+  );
+}
+
+function ChipIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={props.className}
+      {...props}
+    >
+      <rect x="6" y="6" width="12" height="12" rx="1.5" />
+      <path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3" />
+      <rect x="10" y="10" width="4" height="4" rx="0.5" />
     </svg>
   );
 }
@@ -308,7 +330,9 @@ export function App() {
   const loadData = useFactoryStore((s) => s.loadData);
   const selectedNodeId = useGraphStore((s) => s.selectedNodeId);
   const activeContract = useProgressionStore((s) => s.activeContract);
-  type PanelType = 'milestones' | 'palette' | 'summary' | 'inspector' | null;
+  const tycoonUnlocked = useProgressionStore(isTycoonUnlocked);
+  const runReady = useProgressionStore((s) => s.runCompletedFlash);
+  type PanelType = 'milestones' | 'palette' | 'summary' | 'inspector' | 'tycoon' | null;
   const [activePanel, setActivePanel] = useState<PanelType>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -491,6 +515,35 @@ export function App() {
                 <DashboardIcon className="h-5 w-5" />
                 <span className="text-[7.5px] font-mono font-bold tracking-wider uppercase select-none">BILAN</span>
               </button>
+
+              {/* LAB - Le Bureau (couche Tycoon) — visible une fois le compute débloqué */}
+              {tycoonUnlocked && (
+                <button
+                  onClick={() => setActivePanel(activePanel === 'tycoon' ? null : 'tycoon')}
+                  onMouseEnter={() => setActivePanel('tycoon')}
+                  className={`relative flex h-14 w-12 flex-col gap-1 items-center justify-center cursor-pointer rounded border transition-all duration-200 ${
+                    activePanel === 'tycoon'
+                      ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
+                      : runReady
+                      ? 'border-emerald-500 bg-emerald-500/5 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.25)] animate-[pulse_1.5s_infinite_ease-in-out]'
+                      : 'border-zinc-800 bg-zinc-900/30 text-zinc-500 hover:border-cyan-500/50 hover:bg-zinc-900/50 hover:text-cyan-300'
+                  }`}
+                  title="Le Bureau — entraîne et shippe des modèles"
+                  data-testid="tycoon-toggle-btn"
+                >
+                  {runReady && activePanel !== 'tycoon' && (
+                    <span className="absolute top-1 right-1 flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                    </span>
+                  )}
+                  {activePanel === 'tycoon' && (
+                    <div className="absolute left-[-9px] top-1/2 -translate-y-1/2 w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-r-[7px] border-r-cyan-500 filter drop-shadow-[0_0_3px_rgba(34,211,238,0.5)] animate-pulse" />
+                  )}
+                  <ChipIcon className="h-5 w-5" />
+                  <span className="text-[7.5px] font-mono font-bold tracking-wider uppercase select-none">LAB</span>
+                </button>
+              )}
             </div>
 
             {/* Panneau de sélection flottant unique */}
@@ -509,6 +562,7 @@ export function App() {
                   {activePanel === 'palette' && <Palette />}
                   {activePanel === 'inspector' && <Inspector />}
                   {activePanel === 'summary' && <FactorySummaryPanel />}
+                  {activePanel === 'tycoon' && <TycoonPanel />}
                   {activePanel === 'milestones' && (
                     <div className="flex flex-col gap-5">
                       <ContractPanel />
@@ -524,6 +578,7 @@ export function App() {
         <UnlockToast />
         <MicroMilestoneToast />
         <ContractToast />
+        <ShipReviewToast />
         <PlacementDeniedToast />
         <OfflineRecapModal />
         <WelcomeModal />

@@ -6,6 +6,10 @@ import {
   applyProductionTick,
   initialProgression,
   trySpendBolts,
+  startModelProject,
+  shipModelProject,
+  runMarketingPush,
+  hireStaffMember,
   type ProgressionState,
   type TickInput,
 } from '@/game/progression';
@@ -18,6 +22,7 @@ import {
   type ProductionMicroMilestone,
 } from '@/game/balance';
 import type { ContractOffer } from '@/game/contracts';
+import { initialTycoon, type ProjectConfig, type ModelReview, type StaffRole } from '@/game/tycoon';
 
 /** Récapitulatif des gains hors-ligne, en attente d'affichage (transitoire). */
 export interface OfflineRecap {
@@ -53,6 +58,10 @@ interface ProgressionStore extends ProgressionState {
   offlineRecap: OfflineRecap | null;
   /** Résultat de contrat à notifier (réussite/échec), transitoire. */
   contractResult: ContractResult | null;
+  /** Le run d'entraînement vient de se terminer (toast « prêt à shipper »), transitoire. */
+  runCompletedFlash: boolean;
+  /** Review du dernier modèle shippé, en attente d'affichage (modale), transitoire. */
+  shipReview: ModelReview | null;
 
   /** Avance la progression d'un tick depuis l'usine live. */
   tick: (input: TickInput) => void;
@@ -68,6 +77,18 @@ interface ProgressionStore extends ProgressionState {
   dismissOfflineRecap: () => void;
   /** Ferme la notification de résultat de contrat. */
   dismissContractResult: () => void;
+  /** Démarre un projet de modèle (couche Tycoon). */
+  startProject: (config: ProjectConfig) => void;
+  /** Shippe le projet actif (run terminé requis). Renvoie la review, ou null si non prêt. */
+  shipModel: () => ModelReview | null;
+  /** Lance une poussée marketing sur le projet actif (monte le hype). true si payé. */
+  runMarketing: () => boolean;
+  /** Embauche un membre du staff. true si payé (solde suffisant). */
+  hireStaff: (role: StaffRole) => boolean;
+  /** Ferme le flash « run terminé ». */
+  dismissRunCompleted: () => void;
+  /** Ferme la modale de review de modèle shippé. */
+  dismissShipReview: () => void;
   /** Marque l'écran d'accueil comme vu (premier lancement). */
   markWelcomeSeen: () => void;
   /** Passe le tutoriel manuellement. */
@@ -86,11 +107,19 @@ export const useProgressionStore = create<ProgressionStore>()(
       recentMicroMilestones: [],
       offlineRecap: null,
       contractResult: null,
+      runCompletedFlash: false,
+      shipReview: null,
 
       tick: (input) =>
         set((state) => {
-          const { state: next, newlyReached, newlyReachedMicro, contractCompleted, contractFailed } =
-            applyProductionTick(state, input);
+          const {
+            state: next,
+            newlyReached,
+            newlyReachedMicro,
+            contractCompleted,
+            contractFailed,
+            runJustCompleted,
+          } = applyProductionTick(state, input);
           const result: ContractResult | null = contractCompleted
             ? { offer: contractCompleted, outcome: 'completed' }
             : contractFailed
@@ -99,6 +128,7 @@ export const useProgressionStore = create<ProgressionStore>()(
           return {
             ...next,
             contractResult: result,
+            runCompletedFlash: runJustCompleted ? true : state.runCompletedFlash,
             recentUnlocks:
               newlyReached.length > 0
                 ? [...state.recentUnlocks, ...newlyReached]
@@ -133,6 +163,30 @@ export const useProgressionStore = create<ProgressionStore>()(
 
       dismissContractResult: () => set({ contractResult: null }),
 
+      startProject: (config) => set((state) => startModelProject(state, config)),
+
+      shipModel: () => {
+        const { state: next, review } = shipModelProject(get());
+        if (review) set({ ...next, shipReview: review, runCompletedFlash: false });
+        return review;
+      },
+
+      runMarketing: () => {
+        const { state: next, spent } = runMarketingPush(get());
+        if (spent) set(next);
+        return spent;
+      },
+
+      hireStaff: (role) => {
+        const { state: next, spent } = hireStaffMember(get(), role);
+        if (spent) set(next);
+        return spent;
+      },
+
+      dismissRunCompleted: () => set({ runCompletedFlash: false }),
+
+      dismissShipReview: () => set({ shipReview: null }),
+
       markWelcomeSeen: () => set({ welcomeSeen: true }),
 
       dismissTutorial: () => set({ tutorialDismissed: true }),
@@ -150,11 +204,13 @@ export const useProgressionStore = create<ProgressionStore>()(
           recentMicroMilestones: [],
           offlineRecap: null,
           contractResult: null,
+          runCompletedFlash: false,
+          shipReview: null,
         }),
     }),
     {
       name: 'nf-progression',
-      version: 5,
+      version: 7,
       migrate: (persisted, version) => {
         const s = persisted as Record<string, unknown>;
         // v1 → v2 (refonte monnaies) : les anciens AP deviennent des Points de Recherche
@@ -195,6 +251,24 @@ export const useProgressionStore = create<ProgressionStore>()(
             ? EARLY_PRODUCTION_MICRO_MILESTONES.filter((mm) => ingots >= mm.target).map((mm) => mm.id)
             : [];
         }
+        // v5 → v6 (couche Tycoon « Le Bureau ») : nouvel état tycoon. Une partie existante
+        // repart avec aucun projet et une tendance fraîche — rien à reconstruire (le run
+        // n'existait pas avant). Graine dérivée de l'horloge pour varier la tendance.
+        if (version < 6) {
+          s.tycoon = initialTycoon(((Date.now() >>> 0) ^ 0x9e3779b9) || 7);
+        }
+        // v6 → v7 (staff + hype) : garantit les champs ajoutés à l'état tycoon (staff,
+        // hype d'un projet en cours) sur une sauvegarde v6 antérieure.
+        if (version < 7) {
+          const ty = (s.tycoon ?? initialTycoon(((Date.now() >>> 0) ^ 0x9e3779b9) || 7)) as Record<
+            string,
+            unknown
+          >;
+          if (ty.staff == null) ty.staff = { engineer: 0, researcher: 0, 'data-scientist': 0 };
+          const proj = ty.activeProject as Record<string, unknown> | null;
+          if (proj && proj.hype == null) proj.hype = 1;
+          s.tycoon = ty;
+        }
         return s as unknown as ProgressionState;
       },
       // On ne persiste QUE l'état sérialisable, pas les actions ni les notifications transitoires.
@@ -220,6 +294,7 @@ export const useProgressionStore = create<ProgressionStore>()(
         contractOffers: s.contractOffers,
         contractSeed: s.contractSeed,
         offersGeneratedAtGameMin: s.offersGeneratedAtGameMin,
+        tycoon: s.tycoon,
       }),
     },
   ),

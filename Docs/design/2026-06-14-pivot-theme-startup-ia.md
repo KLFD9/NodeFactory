@@ -173,3 +173,44 @@ startup scrappy survit et double ses concurrents. Le score n'est plus abstrait :
    ralentissement si flux insuffisant, buffer = la réserve). Pas de modèle stock/batch (qui
    découplerait l'usine du run).
 ```
+
+## 10. État d'avancement
+
+- **P0 — Reskin** : ✅ livré et commité (dataset, copy, HUD, icônes). Voir l'historique git.
+- **P1 — Boucle Tycoon minimale** : ✅ **première tranche livrée (2026-06-15)**.
+  - **Moteur pur** `src/game/tycoon.ts` (déterministe, testé, façon `contracts.ts`) : 4 types
+    de modèles (langage/vision/code/multimodal) avec dosage idéal + dataset clé + compute requis ;
+    4 domaines ; phases d'effort (pré-entraînement / fine-tuning / alignement / évaluation) ;
+    `ActiveProject`/run piloté par le **débit de compute** (item `electricity`) ; **qualité**
+    (axe séparé du LP, Q3) = dosage × volume de dataset × compute, **−pénalité de défauts** si
+    l'évaluation est négligée ; **review** (benchmark 0-100 + réception communauté × tendance ×
+    hype) → **revenus $ + RP + renommée** ; **tendance de marché** seedée avec TTL.
+  - **Intégration** `src/game/progression.ts` + `useProgressionStore` : slice `tycoon`, run
+    avancé au tick depuis `grossProduction` (compute = `electricity`, dataset clé suivi),
+    `startModelProject` / `shipModelProject` (revenus → Bolts, RP crédités), **migration persist
+    v5→v6**, `isTycoonUnlocked` (gaté : il faut avoir produit du compute).
+  - **UI** : `TycoonPanel` (« Le Bureau » — setup type/domaine/dosage avec gloses néophytes,
+    barre de run compute, qualité estimée en direct, bouton Ship, vitrine renommée/benchmark) +
+    bouton toolbar **LAB** (gaté, pulse « run prêt ») + `ShipReviewToast` (la review GDT-like).
+  - **Monnaie** : Q4 (« $ ») rendue côté revenus, mais le **champ reste `bolts`** dans le code
+    (pas de rename pour éviter le churn ; l'UI Tycoon affiche « $ »). Rename éventuel = passe
+    séparée si le thème tient.
+- **P1 — 2e tranche livrée (2026-06-15) : hype/marketing + staff (début P2)**.
+  - **Hype / marketing** (termine §4.5) : `ActiveProject.hype` (≥ 1), `applyMarketing` (rendements
+    décroissants vers `HYPE_MAX`), `marketingCost` (× hype) ; réducteur `runMarketingPush` (dépense $) ;
+    le hype amplifie la réception au ship (`reviewModel` lit `project.hype`). UI : bloc « Hype » +
+    bouton Campagne dans le run.
+  - **Staff** (cœur P2) : 3 rôles (Ingénieur infra → **vitesse de run**, Chercheur → **qualité**,
+    Data scientist → **efficacité dataset**) avec coût d'embauche + **masse salariale récurrente**
+    (`totalSalaryPerMin`, débitée des Bolts au tick, jamais < 0 — tension scrappy). Multiplicateurs
+    `labSpeedMult`/`labDatasetMult`/`labQualityBonus` appliqués au tick (compute × vitesse, dataset ×
+    eff., qualité + bonus chercheurs plafonné). Réducteur `hireStaffMember`. UI : section « ÉQUIPE »
+    (embauche, effectifs, masse salariale). Lien : agrandir l'usine ET embaucher accélèrent le run.
+  - **Persistance** : migration **v6→v7** (garantit `staff` + `hype` sur sauvegardes v6).
+  - **Tests** : moteur 33 unitaires + intégration progression (salaire/embauche/marketing/vitesse) +
+    3 E2E Tycoon. **341 unitaires + 19 E2E verts** (1 E2E `AMÉLIORER` cassé AVANT le pivot, sans
+    rapport), typecheck + build OK.
+- **RESTE P1 / P2** : arbre de recherche (RP) ; pari contre-tendance ; prestige = génération de modèle
+  (computeRequired qui croît) ; formation/niveaux de staff ; **passe `game-balance`** sur l'économie
+  Tycoon (revenus/RP/renommée/computeRequired/coûts staff/hype — tous les nombres de `tycoon.ts` sont
+  un premier jet marqué `[À VALIDER game-balance]`).
